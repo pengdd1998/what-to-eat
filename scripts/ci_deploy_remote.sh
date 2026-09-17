@@ -3,8 +3,11 @@
 # 红线：只碰 api/admin 具名服务；永不裸 up / --remove-orphans / 平台层 / prune -a / --volumes。
 set -euo pipefail
 
-SSH="ssh -i $VPS_SSH_KEY -p $VPS_PORT -o StrictHostKeyChecking=accept-new $VPS_USER@$VPS_HOST"
-SCP="scp -i $VPS_SSH_KEY -P $VPS_PORT -o StrictHostKeyChecking=accept-new"
+# 多行 PEM 须落临时文件（内联 -i 会把后续行当参数）
+KEY_FILE=$(mktemp); printf '%s\n' "$VPS_SSH_KEY" > "$KEY_FILE"; chmod 600 "$KEY_FILE"
+trap 'rm -f "$KEY_FILE"' EXIT
+SSH="ssh -i $KEY_FILE -p $VPS_PORT -o StrictHostKeyChecking=accept-new $VPS_USER@$VPS_HOST"
+SCP="scp -i $KEY_FILE -P $VPS_PORT -o StrictHostKeyChecking=accept-new"
 
 echo "[deploy] 1/8 preflight（内存/磁盘守卫＋cron 窗口告警）"
 $SSH 'FREE_MB=$(free -m | awk "/^-\/+ Mem/{print \$7}"); DISK_PCT=$(df / | awk "NR==2{gsub(\"%\",\"\$5);print \$5}")
