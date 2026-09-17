@@ -31,18 +31,10 @@ echo "[deploy] 3/8 上传新包＋解包"
 $SCP /tmp/deploy.tgz "$VPS_USER@$VPS_HOST:~/deploy.tgz"
 $SSH "sudo -n tar xzf ~/deploy.tgz -C $DEPLOY_PATH --overwrite && sudo -n find $DEPLOY_PATH -name '._*' -delete && echo 解包OK"
 
-echo "[deploy] 4/8 重建面判定（marker＋内容哈希）"
-DECIDE=$($SSH "cd $DEPLOY_PATH
-MARKER=\$(cat deploy.marker 2>/dev/null || echo none)
-NEW_API=\$(tar xzf ~/deploy.tgz -O app/main.py 2>/dev/null | md5sum | cut -d' ' -f1)
-NEW_ADM=\$(tar xzf ~/deploy.tgz -O app/admin.py 2>/dev/null | md5sum | cut -d' ' -f1)
-OLD_API=\(md5sum app/main.py 2>/dev/null | cut -d' ' -f1)
-OLD_ADM=\(md5sum app/admin.py 2>/dev/null | cut -d' ' -f1)
-# 解包后文件已是新版——与包内比必然相同，改与「运行中容器镜像内」比较不可得；
-# 简化口径：marker 不同即重建双面（保守，绝不漏建——治「只建 api 致 admin 404」）
-if [ \"\$MARKER\" = \"$SHA\" ]; then echo \"0 0 same\"; else echo \"1 1 diff(marker=\$MARKER)\"; fi")
-R_API=$(echo "$DECIDE" | awk '{print $1}'); R_ADMIN=$(echo "$DECIDE" | awk '{print $2}')
-echo "  判定：api=$R_API admin=$R_ADMIN（$($SSH cat $DEPLOY_PATH/deploy.marker 2>/dev/null || echo no-marker) -> $SHA）"
+echo "[deploy] 4/8 重建面判定（marker——变化即双面重建，保守不漏建）"
+MARKER=$($SSH "cat $DEPLOY_PATH/deploy.marker 2>/dev/null || echo none")
+if [ "$MARKER" = "$SHA" ]; then R_API=0; R_ADMIN=0; else R_API=1; R_ADMIN=1; fi
+echo "  判定：api=$R_API admin=$R_ADMIN（marker=$MARKER -> $SHA）"
 
 if [ "$DRY_RUN" = "true" ]; then
   echo "[deploy] DRY_RUN 到此为止（会重建 api=$R_API admin=$R_ADMIN）——不碰容器"
