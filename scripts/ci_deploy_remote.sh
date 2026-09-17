@@ -11,7 +11,7 @@ SCP="scp -i $KEY_FILE -P $VPS_PORT -o StrictHostKeyChecking=accept-new"
 
 echo "[deploy] 1/8 preflight（内存/磁盘守卫＋cron 窗口告警）"
 PREFLIGHT_B64=$(base64 -w0 2>/dev/null <<'REMOTE' || true
-FREE_MB=$(free -m | awk '/^-\/+/ Mem/{print $7}')
+FREE_MB=$(free -m | awk '/^Mem:/{print $7}')
 DISK_PCT=$(df / | awk 'NR==2{gsub("%","",$5);print $5}')
 if [ "$DISK_PCT" -gt 90 ]; then
   docker builder prune --filter until=24h -f >/dev/null 2>&1 || true
@@ -60,7 +60,7 @@ fi
 echo "[deploy] 6/8 health 分层断言（6 次×10s）"
 $SSH "API_OK=0
 for i in 1 2 3 4 5 6; do
-  V=\$(curl -s http://127.0.0.1:8000/api/health | grep -o '\"version\":\"[^\"]*\"' || true)
+  V=\$(curl -s http://127.0.0.1:8881/api/health | grep -o '\"version\":\"[^\"]*\"' || true)
   echo \"  api try\$i: \$V\"
   echo \"\$V\" | grep -q '$SHA' && API_OK=1 && break
   sleep 10
