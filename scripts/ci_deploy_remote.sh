@@ -10,7 +10,7 @@ SSH="ssh -i $KEY_FILE -p $VPS_PORT -o StrictHostKeyChecking=accept-new $VPS_USER
 SCP="scp -i $KEY_FILE -P $VPS_PORT -o StrictHostKeyChecking=accept-new"
 
 echo "[deploy] 1/8 preflight（内存/磁盘守卫＋cron 窗口告警）"
-PREFLIGHT_B64=$(base64 <<'REMOTE'
+PREFLIGHT_B64=$(base64 -w0 2>/dev/null <<'REMOTE' || true
 FREE_MB=$(free -m | awk '/^-\/+/ Mem/{print $7}')
 DISK_PCT=$(df / | awk 'NR==2{gsub("%","",$5);print $5}')
 if [ "$DISK_PCT" -gt 90 ]; then
@@ -49,9 +49,9 @@ if [ "$DRY_RUN" = "true" ]; then
   exit 0
 fi
 
-echo "[deploy] 5/8 构建切换（build 与 up 都带 GIT_SHA；marker 变化即双面重建——保守不漏建）"
+echo "[deploy] 5/8 构建切换（build-arg 带 GIT_SHA；marker 变化即双面重建——保守不漏建）"
 if [ "$R_API" = "1" ]; then
-  $SSH "cd $DEPLOY_PATH && sudo -n env GIT_SHA=$SHA docker compose build api admin && sudo -n env GIT_SHA=$SHA docker compose up -d api admin"
+  $SSH "cd $DEPLOY_PATH && sudo -n docker compose build --build-arg GIT_SHA=$SHA api admin && sudo -n docker compose up -d api admin"
   sleep 14
 else
   echo "  同 SHA 已部署——跳过重建"
