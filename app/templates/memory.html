@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}味觉记忆 · 吃什么{% endblock %}
+{% block main %}
+
+<section class="card">
+  <p class="kicker">味觉记忆</p>
+  <h2 tabindex="-1">你尝过的，我们都记着</h2>
+  <p class="copy">对每道菜点个反馈——<b>对味 +1 / 一般 0 / 不推荐 -1</b>。这些标签会让下次推荐用更少步就收口。</p>
+  <p id="memory-summary" class="hint num" role="status"></p>
+
+  <div class="filters" aria-label="筛选">
+    <input id="f-kw" type="search" placeholder="搜菜名…" aria-label="按名称模糊查询">
+    <select id="f-scene" aria-label="按用餐场景筛选">
+      <option value="">全部场景</option>
+      <option value="早餐">早餐</option>
+      <option value="午餐">午餐</option>
+      <option value="下午茶">下午茶</option>
+      <option value="晚餐">晚餐</option>
+      <option value="宵夜">宵夜</option>
+    </select>
+    <select id="f-fb" aria-label="按评价筛选">
+      <option value="">全部评价</option>
+      <option value="1">对味 +1</option>
+      <option value="0">一般 0</option>
+      <option value="-1">不推荐 -1</option>
+      <option value="unrated">未评价</option>
+    </select>
+    <select id="f-time" aria-label="按时间筛选">
+      <option value="">全部时间</option>
+      <option value="7">近 7 天</option>
+      <option value="30">近 30 天</option>
+      <option value="90">近 90 天</option>
+    </select>
+  </div>
+</section>
+
+<section id="memory-list" class="card" aria-live="polite">
+  <p class="hint">加载中…</p>
+</section>
+<p id="memory-empty" class="hint hidden" style="text-align:center">没有符合筛选条件的记录。</p>
+
+<p class="disclaimer">反馈只作为匿名口味标签使用，不关联任何个人身份信息。</p>
+{% endblock %}
+{% block scripts %}
+<script src="/static/app.js?v={{ version }}h"></script>
+{% endblock %}

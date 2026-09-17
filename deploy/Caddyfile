@@ -1,0 +1,11 @@
+# 「吃什么」边缘（whattoeat.lifestyle＝P-c 微信外路径正式主机名）
+# 注：.lifestyle 未获工信部批复（不可 ICP 备案）——微信内 webview 将拦截本域，
+# 本域仅服务微信外浏览器路径（载体重评证据链：docs/execution/adr002-carrier-reeval-input.md）
+whattoeat.lifestyle {
+	encode gzip
+	# §4.1 评审 8 第三层：公网 /api/admin 一律 403（admin 真身仅宿主回环 8001）
+	handle /api/admin/* {
+		respond 403
+	}
+	reverse_proxy api:8000
+}

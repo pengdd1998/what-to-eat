@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{% block title %}吃什么 · 30秒收口{% endblock %}</title>
+<link rel="stylesheet" href="/static/style.css?v={{ version }}">
+<link rel="manifest" href="/static/manifest.webmanifest">
+<meta name="theme-color" content="#0F1F18">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+</head>
+<body data-theme="auto">
+<div class="wrap">
+  <header>
+    <h1>吃什么</h1>
+    <p class="sub">5~8 步，给你一个收口答案</p>
+  </header>
+  <main>{% block main %}{% endblock %}</main>
+  <footer>
+    <p class="disclaimer">仅供娱乐，不构成饮食/健康建议{% if version %} · v{{ version }}{% endif %}。</p>
+  </footer>
+</div>
+<nav class="footnav" aria-label="主导航">
+  <a href="/">选餐</a>
+  <a href="/memory">味觉记忆</a>
+  <a href="/identity">我的身份</a>
+</nav>
+{% block scripts %}{% endblock %}
+</body>
+</html>

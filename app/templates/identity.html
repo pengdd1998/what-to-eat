@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}我的身份 · 吃什么{% endblock %}
+{% block main %}
+
+<section class="card">
+  <p class="kicker">我的匿名标识</p>
+  <h2 tabindex="-1">这串代号就是你</h2>
+  <p class="copy">无需注册。这串匿名代号存在你本机浏览器里；设了口令后，换设备/清缓存也能凭它＋口令找回你的口味记忆。</p>
+
+  <label for="anon-id-box">匿名标识（可见、可复制）</label>
+  <div class="row">
+    <code id="anon-id-box" class="num">…</code>
+    <button id="btn-copy" class="ghost" style="flex:0 0 auto;min-height:44px">复制</button>
+  </div>
+  <p id="copy-hint" class="hint" role="status"></p>
+</section>
+
+<section class="card">
+  <p class="kicker">口令（可选）</p>
+  <h2 id="pass-heading" tabindex="-1">设个口令</h2>
+  <p class="hint">至少 8 位，需同时含字母和数字。连续输错 5 次锁定 10 分钟。</p>
+  <label for="pass-input">口令</label>
+  <div class="row"><input id="pass-input" type="password" inputmode="text" autocomplete="new-password" placeholder="设置/更换口令"></div>
+  <div class="row">
+    <button id="btn-set-pass" class="primary">保存口令</button>
+  </div>
+  <p id="pass-hint" class="hint" role="status"></p>
+</section>
+
+<section class="card">
+  <p class="kicker">换机找回</p>
+  <h2 tabindex="-1">用旧代号＋口令找回</h2>
+  <label for="recover-id">旧匿名标识</label>
+  <div class="row"><input id="recover-id" class="num" placeholder="8 位代号"></div>
+  <label for="recover-pass">口令</label>
+  <div class="row"><input id="recover-pass" type="password" autocomplete="current-password" placeholder="口令"></div>
+  <div class="row">
+    <button id="btn-recover" class="primary">找回并切换</button>
+  </div>
+  <p id="recover-hint" class="hint" role="status"></p>
+</section>
+
+<section class="card">
+  <p class="kicker">主题</p>
+  <div class="row">
+    <button id="theme-auto" class="ghost">跟随时钟（默认）</button>
+    <button id="theme-day" class="ghost">奶油暖色</button>
+    <button id="theme-night" class="ghost">暗夜暖灯</button>
+  </div>
+</section>
+
+<section class="card">
+  <p class="kicker">危险区</p>
+  <h2 tabindex="-1">清空我的全部数据</h2>
+  <p class="copy">删除你所有的选餐记录与口味反馈（不可恢复）。</p>
+  <div class="row">
+    <button id="btn-clear" class="ghost danger">一键清空</button>
+  </div>
+  <p id="clear-hint" class="hint" role="status"></p>
+</section>
+
+{% endblock %}
+{% block scripts %}
+<script src="/static/app.js?v={{ version }}h"></script>
+{% endblock %}

@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="evening" data-season="autumn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<title>吃什么 · 街角灯箱（高保真原型）</title>
+<!--
+  ── 方向合同（design contract / seed: brief-pinned C，2026-09-03 用户拍板）──────────
+  THESIS: 一块深夜街角的灯箱——热闹但一次只亮一块牌子：单屏单焦点，一屏只做一个决定。
+  本界面拒绝品类默认的"卡片列表+渐变英雄区"，也拒绝把推荐做成信息流。
+  OWN-WORLD: 墨绿铁皮地面＋芥末黄唯一大色块＋3px 描边贴纸卡＋硬阴影厚度＋
+  等宽数字票据角标；零渐变零柔光，立体感只来自描边与位移；灯箱片（主题）可换，
+  结构语言永不换。字＝系统黑体 w900 标语体（零 Webfont，首屏 ≤2s 硬预算使然）。
+  STORY: 疲惫的人把决定交出来 → 30 秒内拿到唯一答案＋一句带锅气的话 →
+  就吃这个，跳转平台；记得你（回访菜名回填），不装医生，不画饼。
+  FIRST VIEWPORT: 顶部 mono 票头「吃什么 · NO.日期」；中央灯箱贴纸卡承载
+  标语「今晚它说了算」（w900 26px）＋一行预算说明；下方芥末黄大按钮「开始点灯」
+  （52px）；按钮正下常驻兜底出口「懒得选？翻牌直给」。主行动位于拇指热区。
+  FORM: 方向 C「街角灯箱」，brief-pinned（docs/design/design-directions.md §拍板记录，
+  含拍板理由：主题随时间/季节/天气换片 → §1.6 灯箱片系统）。
+  FINISH: unreviewed and undocumented is unfinished; this build ends with the
+  finish review, the verdict, DESIGN.md, and every shipping raster carrying its
+  provenance.
+──────────────────────────────────────────────────────────────────────
+-->
+<style>
+/* ============ 灯箱片 tokens（§1.6：结构层不变，片层可换） ============ */
+:root{
+  --s-2:8px;--s-3:12px;--s-4:16px;--s-5:20px;--s-6:24px;--s-8:32px;
+  --r-card:12px;--r-btn:12px;
+  --bd-sticker:3px;--bd-chip:2px;
+  --shadow-pop:0 4px 0 rgba(0,0,0,.5);
+  --shadow-press:0 1px 0 rgba(0,0,0,.5);
+  --t-press:90ms cubic-bezier(.3,0,.7,.4);
+  --t-flip:240ms cubic-bezier(.2,.7,.3,1.12);
+  --t-lit:60ms linear;
+  --t-fade:160ms ease-out;
+  --t-slide:200ms ease-out;
+  --font-sans:-apple-system,"PingFang SC","HarmonyOS Sans SC","MiSans","Source Han Sans SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif;
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+/* 片：evening 晚市（默认，暗） */
+html[data-theme="evening"]{
+  --bg-0-base:#0F1F18;--bg-0:var(--bg-0-base);--bg-1:#14281F;--bg-2:#1B3327;--bg-3:#24402F;
+  --ink-1:#F2EFE6;--ink-2:#A8B5A3;--ink-3:#6E8274;
+  --y:#FFC53D;--y-ink:#101A14;--r:#FF5A3C;--r-text:#FF8A6E;--c:#3DDAD7;
+  --line:#2A4436;--focus:#3DDAD7;--sticker-bd:#FFC53D;--shade:rgba(0,0,0,.5);
+}
+/* 片：late 深夜（钠灯） */
+html[data-theme="late"]{
+  --bg-0-base:#0B1411;--bg-0:var(--bg-0-base);--bg-1:#10201A;--bg-2:#15291F;--bg-3:#1D3527;
+  --ink-1:#EFEAD9;--ink-2:#9FAE9A;--ink-3:#5F7367;
+  --y:#FFA53C;--y-ink:#141007;--r:#F0644A;--r-text:#FF8A6E;--c:#2FA39B;
+  --line:#24382E;--focus:#2FA39B;--sticker-bd:#FFA53C;--shade:rgba(0,0,0,.55);
+}
+/* 片：morning 清晨（亮，豆浆纸白） */
+html[data-theme="morning"]{
+  --bg-0-base:#F5F1E6;--bg-0:var(--bg-0-base);--bg-1:#FBF8EF;--bg-2:#EFE9D8;--bg-3:#E6DFC9;
+  --ink-1:#1A241E;--ink-2:#4C5A50;--ink-3:#8A968C;
+  --y:#D98E04;--y-ink:#1A241E;--r:#B33018;--r-text:#B33018;--c:#0E8F88;
+  --line:#D8D0B8;--focus:#0E8F88;--sticker-bd:#1F4A38;--shade:rgba(26,36,30,.28);
+}
+/* 片：noon 午市（亮，白炽豆绿） */
+html[data-theme="noon"]{
+  --bg-0-base:#EFF2E4;--bg-0:var(--bg-0-base);--bg-1:#F8FAEF;--bg-2:#E6EAD6;--bg-3:#DBE1C6;
+  --ink-1:#182420;--ink-2:#44544A;--ink-3:#7E8D82;
+  --y:#1F4A38;--y-ink:#F2EFE6;--r:#C93A22;--r-text:#B33018;--c:#0E8F88;
+  --line:#D2D8BE;--focus:#0E8F88;--sticker-bd:#1F4A38;--shade:rgba(24,36,32,.25);
+}
+/* 主按钮/大色块统一走 --y；noon 片的 --y 即墨绿块 */
+/* 季节调制（副轴；基于 --bg-0-base 混色，避免同元素循环引用；
+   color-mix 渐进增强，旧内核回退 base 地面） */
+html[data-season="spring"]{--bg-0:color-mix(in oklab,var(--bg-0-base) 94%,#3DDAD7);}
+html[data-season="summer"]{--bg-0:color-mix(in oklab,var(--bg-0-base) 95%,#2FA39B);}
+html[data-season="autumn"]{--bg-0:color-mix(in oklab,var(--bg-0-base) 93%,#D98E04);}
+html[data-season="winter"]{--bg-0:color-mix(in oklab,var(--bg-0-base) 96%,#5A6B70);}
+
+/* ============ 基础 ============ */
+*{box-sizing:border-box;margin:0}
+html{-webkit-text-size-adjust:100%}
+body{
+  background:var(--bg-0);color:var(--ink-1);
+  font:400 16px/1.6 var(--font-sans);
+  min-height:100vh;padding:var(--s-5);
+  transition:background-color var(--t-lit);
+}
+::selection{background:var(--y);color:var(--y-ink)}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:4px}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.hidden{display:none!important}
+.num{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+@media (min-width:460px){body{max-width:420px;margin:0 auto}}
+
+/* ============ 票头 ============ */
+.mast{display:flex;justify-content:space-between;align-items:center;padding:var(--s-2) 0 var(--s-5)}
+.mast .brand{font-weight:900;font-size:18px;letter-spacing:.02em}
+.mast .no{font-family:var(--font-mono);font-size:12px;color:var(--ink-2);letter-spacing:.04em}
+.mast button{color:var(--ink-2);font-size:13px;padding:10px;min-width:44px;min-height:44px}
+.mast button:active{transform:scale(.96)}
+
+/* ============ 贴纸卡（灯箱面） ============ */
+.card{
+  position:relative;background:var(--bg-1);
+  border:var(--bd-sticker) solid var(--sticker-bd);border-radius:var(--r-card);
+  box-shadow:var(--shadow-pop);
+  padding:var(--s-6) var(--s-5);
+}
+.card .rivet{position:absolute;width:5px;height:5px;border-radius:50%;background:var(--line)}
+.card .rivet.tl{top:7px;left:7px}.card .rivet.tr{top:7px;right:7px}
+.card .rivet.bl{bottom:7px;left:7px}.card .rivet.br{bottom:7px;right:7px}
+/* 灯箱条：卡顶黄块牌子（品牌时刻载体，非 kicker——它是判定语本身） */
+.lightbar{
+  display:flex;align-items:center;gap:var(--s-2);
+  background:var(--y);color:var(--y-ink);
+  border-radius:8px;padding:6px 12px;margin-bottom:var(--s-4);
+  font-weight:900;font-size:15px;letter-spacing:.06em;width:max-content;max-width:100%;
+}
+.lightbar svg{flex:none}
+
+/* ============ 按钮 ============ */
+.btn{
+  display:flex;align-items:center;justify-content:center;width:100%;
+  min-height:52px;border-radius:var(--r-btn);
+  background:var(--y);color:var(--y-ink);
+  font-weight:900;font-size:17px;letter-spacing:.08em;
+  border:var(--bd-sticker) solid var(--y-ink);
+  box-shadow:var(--shadow-pop);
+  transition:transform var(--t-press),box-shadow var(--t-press),opacity var(--t-fade);
+}
+.btn:active{transform:translateY(3px);box-shadow:var(--shadow-press)}
+.btn[disabled]{opacity:.45;pointer-events:none}
+.ghost{
+  display:flex;align-items:center;justify-content:center;width:100%;
+  min-height:52px;border-radius:var(--r-btn);
+  border:var(--bd-chip) solid var(--line);color:var(--ink-1);
+  font-weight:500;font-size:15px;
+  transition:transform var(--t-press),background-color var(--t-lit);
+}
+.ghost:active{transform:translateY(2px);background:var(--bg-2)}
+.ghost[disabled]{opacity:.4;pointer-events:none}
+.linklike{color:var(--r-text);font-size:13px;min-height:44px;padding:0 var(--s-2);text-decoration:underline;text-underline-offset:3px}
+.row2{display:flex;gap:var(--s-3)}
+.row2>*{flex:1}
+
+/* ============ 标签 ============ */
+.tags{display:flex;flex-wrap:wrap;gap:var(--s-3);margin:var(--s-4) 0}
+.tag{
+  position:relative;display:inline-flex;align-items:center;
+  min-height:44px;padding:8px 16px;border-radius:999px;
+  border:var(--bd-chip) solid var(--line);color:var(--ink-1);
+  font-size:15px;font-weight:500;background:transparent;
+  transition:background-color var(--t-lit),color var(--t-lit),border-color var(--t-lit);
+}
+.tag::after{content:"";position:absolute;inset:-6px} /* 44px 命中垫 */
+.tag[aria-pressed="true"]{background:var(--y);color:var(--y-ink);border-color:var(--y);font-weight:900}
+.tags .tag{animation:deal 200ms ease-out both;animation-delay:calc(var(--i,0)*30ms)}
+
+/* ============ 视图/动效 ============ */
+.view{animation:fadein var(--t-fade)}
+@keyframes fadein{from{opacity:0}to{opacity:1}}
+.flipwrap{perspective:900px}
+.flip{transform-origin:50% 0;animation:flip var(--t-flip) both}
+@keyframes flip{from{transform:rotateX(92deg)}to{transform:rotateX(0)}}
+html[data-motion="off"] .flip{animation:none}
+.breathe{animation:breathe 1.2s ease-in-out infinite}
+@keyframes breathe{0%,100%{border-color:var(--sticker-bd)}50%{border-color:var(--line)}}
+.toast{
+  position:fixed;left:50%;bottom:88px;transform:translateX(-50%);
+  background:var(--bg-1);border:var(--bd-chip) solid var(--sticker-bd);
+  border-radius:10px;padding:10px 16px;font-size:14px;color:var(--ink-1);
+  box-shadow:var(--shadow-pop);z-index:60;max-width:88vw;text-align:center;
+}
+.sheet-back{position:fixed;inset:0;background:rgba(6,12,9,.6);z-index:40;display:flex;align-items:flex-end}
+.sheet{
+  width:100%;max-width:420px;margin:0 auto;
+  background:var(--bg-1);border:var(--bd-sticker) solid var(--sticker-bd);
+  border-bottom:none;border-radius:var(--r-card) var(--r-card) 0 0;
+  padding:var(--s-6) var(--s-5) calc(var(--s-6) + env(safe-area-inset-bottom));
+  animation:slideup var(--t-slide) both;
+}
+@keyframes slideup{from{transform:translateY(40%)}to{transform:translateY(0)}}
+
+/* ============ 文字 ============ */
+.slogan{font-weight:900;font-size:26px;line-height:1.3;letter-spacing:.02em}
+.dish{font-weight:900;font-size:40px;line-height:1.15;letter-spacing:.01em;overflow-wrap:anywhere}
+.h-quiz{font-weight:900;font-size:20px;line-height:1.4;margin-bottom:var(--s-2)}
+.body{font-size:16px;line-height:1.6}
+.caption{font-size:13px;line-height:1.5;color:var(--ink-2)}
+.cap-r{font-size:13px;color:var(--r-text);font-weight:500}
+.spacer{flex:1}
+.stack{display:flex;flex-direction:column;gap:var(--s-3)}
+.stack-l{display:flex;flex-direction:column;gap:var(--s-5)}
+/* 节奏：屏级分离 24px，组内紧凑 12px——段落呼吸差 */
+#app{gap:var(--s-6)}
+.hr{border:none;border-top:var(--bd-chip) dashed var(--line);margin:var(--s-4) 0}
+.opt{
+  display:block;width:100%;text-align:left;min-height:52px;
+  border:var(--bd-chip) solid var(--line);border-radius:var(--r-btn);
+  padding:12px 16px;font-size:16px;background:var(--bg-1);
+  transition:background-color var(--t-lit),color var(--t-lit),border-color var(--t-lit),font-weight;
+}
+.opt[aria-pressed="true"]{background:var(--y);color:var(--y-ink);border-color:var(--y);font-weight:900}
+.dishtype{color:var(--ink-2)}
+
+/* ============ 单词卡闯关（选项牌；用户修订 2026-09-03：题目居中上·选项卡在下·带动效） ============ */
+.qwrap{display:flex;flex-direction:column;align-items:center;text-align:center;gap:var(--s-4);padding-top:var(--s-3)}
+.bulbs{display:flex;gap:10px}
+.bulb{width:12px;height:12px;border-radius:50%;border:2px solid var(--line);transition:background-color var(--t-lit),border-color var(--t-lit)}
+.bulb.on{background:var(--y);border-color:var(--y)}
+.q-center{display:inline-flex;align-items:center;gap:14px;font-weight:900;font-size:26px;line-height:1.35}
+.q-center::before,.q-center::after{content:"";width:20px;height:4px;border-radius:2px;background:var(--y);flex:none}
+.flash-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s-3);width:100%}
+.flash-grid.two{grid-template-columns:repeat(2,1fr)}
+.flash-card{
+  position:relative;display:flex;align-items:center;justify-content:center;text-align:center;
+  min-height:96px;padding:12px 8px;border-radius:var(--r-card);
+  border:2px solid var(--line);background:var(--bg-1);
+  font-weight:700;font-size:16px;box-shadow:var(--shadow-pop);
+  transition:transform var(--t-press),background-color var(--t-lit),color var(--t-lit),border-color var(--t-lit);
+  animation:deal 200ms ease-out both;animation-delay:calc(var(--i,0)*45ms);
+}
+@keyframes deal{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.flash-card:active{transform:translateY(2px)}
+.flash-card[aria-pressed="true"]{background:var(--y);color:var(--y-ink);border-color:var(--y);font-weight:900;transform:translateY(-2px)}
+.flash-card.dim{opacity:.35}
+/* 大卡变体（纯文字版——用户修订③：暂撤示意图，只展示选项内容；插画恢复见 G8） */
+.flash-card.big{min-height:150px;font-size:19px;font-weight:900;color:var(--y);letter-spacing:.04em}
+/* 小卡变体（标签墙卡牌化：2 列多选） */
+.flash-card.small{min-height:76px;font-size:17px;font-weight:700;color:var(--ink-1)}
+.qflip{animation:flip var(--t-flip) both}
+
+/* 免责 footer */
+.disclaim{margin-top:var(--s-5);text-align:center}
+
+/* 原型控制台（非产品 UI） */
+.proto{margin-top:var(--s-6);border-top:var(--bd-chip) dashed var(--line);padding-top:var(--s-3)}
+.proto summary{color:var(--ink-3);font-size:12px;cursor:pointer;min-height:44px;display:flex;align-items:center}
+.proto .chip{
+  display:inline-block;min-height:36px;padding:6px 12px;margin:2px;
+  border:var(--bd-chip) solid var(--line);border-radius:999px;
+  font-size:12px;color:var(--ink-2);
+}
+.proto .chip:active{background:var(--bg-2)}
+</style>
+</head>
+<body>
+
+<header class="mast">
+  <span class="brand">吃什么</span>
+  <span class="no" id="ticket-no">NO.</span>
+  <button id="btn-identity" data-track="identity_open" aria-label="我的标识与口令">标识</button>
+</header>
+
+<main id="app" class="stack-l">
+
+  <!-- S2 首屏 -->
+  <section id="v-home" class="view stack-l" aria-labelledby="home-slogan">
+    <!-- S11 回访卡（被记得的闭环；有昨晚菜名时出现） -->
+    <div id="revisit" class="card hidden" role="region" aria-label="昨晚回访">
+      <span class="rivet tl"></span><span class="rivet tr"></span><span class="rivet bl"></span><span class="rivet br"></span>
+      <p class="body" id="revisit-q">昨晚的『——』，还对味吗？</p>
+      <div id="revisit-tags" class="flash-grid" style="margin-bottom:0"></div>
+      <p class="caption" id="revisit-done" aria-live="polite"></p>
+    </div>
+
+    <div class="card flipwrap">
+      <span class="rivet tl"></span><span class="rivet tr"></span><span class="rivet bl"></span><span class="rivet br"></span>
+      <h1 class="slogan" id="home-slogan">今晚它说了算。</h1>
+      <p class="caption" style="margin-top:8px">最多 3 题 · 30 秒 · 只给你一个答案</p>
+    </div>
+    <button class="btn" id="btn-start" data-track="session_start">开 始 点 灯</button>
+    <button class="ghost" id="btn-skip-all" data-track="abandon">懒得选？翻牌直给</button>
+  </section>
+
+  <!-- S3 冷启动画像（单词卡闯关：题居中上·选项卡在下·选中自动翻下一关） -->
+  <section id="v-cold" class="view hidden" aria-labelledby="cold-title">
+    <div class="qwrap">
+      <p class="num" style="color:var(--ink-2)">先花 15 秒认识你（只需一次）</p>
+      <div class="bulbs" id="cold-bulbs" aria-hidden="true"><i class="bulb on"></i><i class="bulb"></i><i class="bulb"></i></div>
+      <div id="cold-qcard">
+        <h2 class="q-center" id="cold-title">口味轻重？</h2>
+        <div class="flash-grid" id="cold-opts" role="group" aria-labelledby="cold-title" style="margin-top:var(--s-4)"></div>
+      </div>
+      <p class="caption hidden" id="cold-err">偏好没存上，不影响今晚。</p>
+    </div>
+  </section>
+
+  <!-- S4 今晚问卷（两关：关1 标签墙 · 关2 状态闪卡） -->
+  <section id="v-quiz" class="view hidden" aria-labelledby="quiz-title">
+    <div id="quiz-stage-tags" class="stack-l">
+      <div class="card">
+        <span class="rivet tl"></span><span class="rivet tr"></span><span class="rivet bl"></span><span class="rivet br"></span>
+        <h2 class="h-quiz" id="quiz-title">今晚最讲究什么？<span class="caption" style="font-weight:400">（关 1/2）</span></h2>
+        <p class="caption" id="quiz-conv">选一个最讲究的，也可跳过</p>
+        <div id="quiz-tags" class="flash-grid two" style="margin-top:var(--s-3)"></div>
+      </div>
+      <div class="row2">
+        <button class="ghost" id="btn-giveup" data-track="abandon">不想选了？翻牌直给</button>
+        <button class="btn" id="btn-quiz-go" disabled data-track="answer">下 一 关</button>
+      </div>
+    </div>
+    <div id="quiz-stage-q2" class="qwrap hidden">
+      <p class="num" style="color:var(--ink-2)">今晚有什么讲究 · 关 2/2</p>
+      <div class="bulbs" aria-hidden="true"><i class="bulb on"></i><i class="bulb"></i></div>
+      <h2 class="q-center">今天状态更接近？</h2>
+      <div class="flash-grid two" id="quiz-q2-opts" role="group" aria-label="今天状态更接近？"></div>
+      <button class="linklike" id="btn-q2-skip" data-track="abandon">这关不想选，直接给</button>
+    </div>
+    <p class="caption hidden" id="quiz-429" role="alert" style="text-align:center;margin-top:var(--s-3)">点太快啦，锅还没热。歇一秒。</p>
+  </section>
+
+  <!-- S5 等待 -->
+  <section id="v-wait" class="view stack-l hidden" aria-label="出结果中">
+    <div class="card breathe" style="text-align:center;padding:var(--s-8) var(--s-5)">
+      <span class="rivet tl"></span><span class="rivet tr"></span><span class="rivet bl"></span><span class="rivet br"></span>
+      <p class="slogan" style="font-size:22px">翻牌中</p>
+      <p class="num" id="wait-clock" style="font-size:28px;color:var(--ink-2);margin-top:8px">0.0s</p>
+      <p class="caption" style="margin-top:8px">好菜不过夜。</p>
+    </div>
+  </section>
+
+  <!-- S6 结果揭晓 -->
+  <section id="v-result" class="view stack-l hidden" aria-labelledby="res-dish">
+    <div class="card flipwrap" id="res-card">
+      <span class="rivet tl"></span><span class="rivet tr"></span><span class="rivet bl"></span><span class="rivet br"></span>
+      <div class="lightbar" id="res-bar" style="margin-bottom:var(--s-4)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
+          <path d="M3 12h18M6 12a6 6 0 0 0 12 0"/><path d="M8 5l4 3 4-3"/>
+        </svg>
+        <span id="res-bar-text">今晚就它</span>
+      </div>
+      <div class="flip" id="res-flip">
+        <h2 class="dish" id="res-dish" aria-live="polite"></h2>
+        <p class="body" id="res-copy" style="margin-top:var(--s-3)"></p>
+        <p class="cap-r hidden" id="res-degraded">家常兜底版</p>
+        <!-- 平涂灯箱剪影（本世界唯一授权插画位；单色 --y，几何平涂；置卡尾右，不与判定牌争焦） -->
+        <svg class="silhouette" width="48" height="34" viewBox="0 0 56 40" aria-hidden="true" style="color:var(--y);display:block;margin:var(--s-3) 0 0 auto">
+          <g fill="currentColor">
+            <path d="M6 14h40a20 20 0 0 1-13 18.7V36h6a2 2 0 1 1 0 4H13a2 2 0 1 1 0-4h6v-3.3A20 20 0 0 1 6 14Z"/>
+            <rect x="38" y="1" width="3" height="14" rx="1.5" transform="rotate(18 39.5 8)"/>
+            <rect x="46" y="0" width="3" height="14" rx="1.5" transform="rotate(26 47.5 7)"/>
+          </g>
+        </svg>
+      </div>
+    </div>
+    <button class="btn" id="btn-accept" data-track="accept">就 吃 这 个</button>
+    <div class="row2">
+      <button class="ghost" id="btn-swap" data-track="swap">换一个<span class="num" id="swap-left" style="margin-left:6px"></span></button>
+      <button class="ghost" id="btn-reask" data-track="re_ask">都不行，再问一轮</button>
+    </div>
+    <button class="linklike" id="btn-neg" data-track="negative_feedback" style="align-self:center">这推荐不行</button>
+    <p class="caption disclaim">推荐仅为就餐参考，不构成健康或医疗建议；特殊饮食需求请遵医嘱。</p>
+    <!-- S13 PWA 引导条 -->
+    <div class="card hidden" id="pwa-tip" role="region" aria-label="添加到主屏幕" style="padding:var(--s-4)">
+      <span class="rivet tl"></span><span class="rivet tr"></span><span class="rivet bl"></span><span class="rivet br"></span>
+      <p class="body" style="font-weight:700">把它钉到桌面</p>
+      <p class="caption" style="margin-top:4px">浏览器菜单「添加到主屏幕」——下次点图标直达，不用记网址。</p>
+      <button class="ghost" id="btn-pwa-ok" style="min-height:44px;margin-top:var(--s-3)">知道了</button>
+    </div>
+  </section>
+
+  <!-- S7 弃答兜底 -->
+  <section id="v-fallback" class="view stack-l hidden" aria-labelledby="fb-dish">
+    <div class="card">
+      <span class="rivet tl"></span><span class="rivet tr"></span><span class="rivet bl"></span><span class="rivet br"></span>
+      <div class="lightbar"><span>不选了，直接上菜</span></div>
+      <h2 class="dish" id="fb-dish" style="font-size:34px" aria-live="polite"></h2>
+      <p class="body" id="fb-copy" style="margin-top:var(--s-3)"></p>
+    </div>
+    <button class="btn" id="btn-fb-accept" data-track="accept">就 吃 这 个</button>
+    <button class="ghost" id="btn-fb-back" data-track="answer">等等，我还是选一下</button>
+  </section>
+
+  <!-- S8 跳转过渡 -->
+  <section id="v-go" class="view hidden" style="text-align:center;padding-top:30vh" aria-live="polite">
+    <p class="num" style="color:var(--ink-2)">去美团搜</p>
+    <p class="dish" id="go-dish" style="font-size:30px;margin-top:8px"></p>
+  </section>
+
+  <!-- S9 兜底页 -->
+  <section id="v-dead" class="view stack-l hidden" aria-labelledby="dead-title">
+    <div class="card">
+      <span class="rivet tl"></span><span class="rivet tr"></span><span class="rivet bl"></span><span class="rivet br"></span>
+      <div class="lightbar"><span id="dead-title">通道维护中</span></div>
+      <p class="body">今晚外卖跳转通道维护中。菜已给你，照旧能吃：</p>
+      <p class="dish" id="dead-dish" style="font-size:28px;margin:var(--s-3) 0"></p>
+      <button class="ghost" id="btn-copy-dish" data-track="link_dead_fallback">复制菜名</button>
+      <p class="caption" style="margin-top:var(--s-3)">打开外卖 App，粘贴搜索即可。</p>
+    </div>
+    <button class="ghost" id="btn-dead-home">回首页</button>
+  </section>
+
+  <!-- S10 身份页 -->
+  <section id="v-identity" class="view stack-l hidden" aria-labelledby="id-title">
+    <div class="card">
+      <span class="rivet tl"></span><span class="rivet tr"></span><span class="rivet bl"></span><span class="rivet br"></span>
+      <h2 class="h-quiz" id="id-title">我的标识与口令</h2>
+      <p class="caption">仅保存在这台设备上的随机编号——换设备/清缓存后凭口令找回口味记录。</p>
+      <p class="num" id="anon-display" style="font-size:18px;margin:var(--s-3) 0;letter-spacing:.03em"></p>
+      <div class="row2">
+        <button class="ghost" id="btn-copy-anon" style="min-height:44px">复制标识</button>
+        <button class="ghost" id="btn-passcode" style="min-height:44px">设置口令</button>
+      </div>
+      <p class="cap-r" id="passcode-err" role="alert" style="margin-top:8px"></p>
+      <hr class="hr">
+      <p class="caption">口令只存加盐哈希；连错 5 次锁 24 小时。</p>
+    </div>
+
+    <!-- 灯箱片主题（§1.6；手动覆盖） -->
+    <div class="card">
+      <span class="rivet tl"></span><span class="rivet tr"></span><span class="rivet bl"></span><span class="rivet br"></span>
+      <h2 class="h-quiz" style="font-size:17px">灯箱片 · 换片</h2>
+      <p class="caption">默认跟随时间自动换片（本地时钟，不联网不定位）。</p>
+      <div class="tags" style="margin-bottom:0" id="theme-slots">
+        <button class="tag" data-theme-set="auto" aria-pressed="true">跟随时间</button>
+        <button class="tag" data-theme-set="morning">清晨</button>
+        <button class="tag" data-theme-set="noon">午市</button>
+        <button class="tag" data-theme-set="evening">晚市</button>
+        <button class="tag" data-theme-set="late">深夜</button>
+      </div>
+      <div class="tags" style="margin-bottom:0" id="season-slots">
+        <button class="tag" data-season-set="auto" aria-pressed="true">跟随季节</button>
+        <button class="tag" data-season-set="spring">春</button>
+        <button class="tag" data-season-set="summer">夏</button>
+        <button class="tag" data-season-set="autumn">秋</button>
+        <button class="tag" data-season-set="winter">冬</button>
+      </div>
+    </div>
+
+    <button class="linklike" id="btn-wipe" data-track="wipe" style="align-self:center">清空我的全部记录</button>
+    <button class="ghost" id="btn-id-back">返回</button>
+  </section>
+
+  <!-- S12 假门（M3 演示） -->
+  <section id="v-fakedoor" class="view stack-l hidden" aria-labelledby="fd-title">
+    <div class="card">
+      <span class="rivet tl"></span><span class="rivet tr"></span><span class="rivet bl"></span><span class="rivet br"></span>
+      <div class="lightbar"><span> 如果未来收 <span class="num" id="fd-anchor">[X]</span> 元/月</span></div>
+      <h2 class="h-quiz" id="fd-title" style="font-size:18px">这样的晚饭收口，值吗？</h2>
+      <p class="caption">验证期完全免费 · 不发促销 · 不留任何联系方式</p>
+    </div>
+    <button class="btn" id="btn-fd-reg" data-track="fakedoor_register">愿意买单，登记一下</button>
+    <p class="caption hidden" id="fd-done" aria-live="polite">记下了。真到那天，第一个通知你。（仅记点击，无联系方式）</p>
+    <button class="ghost" id="btn-fd-back">返回</button>
+  </section>
+
+  <!-- 清空确认 -->
+  <div class="sheet-back hidden" id="wipe-confirm" role="dialog" aria-modal="true" aria-label="确认清空">
+    <div class="sheet">
+      <p class="body" style="font-weight:900">清空后，口味记录找不回来（未设口令时）。</p>
+      <div class="row2" style="margin-top:var(--s-4)">
+        <button class="ghost" id="btn-wipe-no">手滑了</button>
+        <button class="btn" id="btn-wipe-yes" data-track="wipe_confirm">清 空</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- S1 隐私弹窗 -->
+  <div class="sheet-back hidden" id="v-privacy" role="dialog" aria-modal="true" aria-labelledby="pv-title">
+    <div class="sheet">
+      <h2 class="h-quiz" id="pv-title">先说清楚我们收集什么</h2>
+      <p class="body">只记录你在这个页面里的答题与选择（点了什么、换没换、跳没跳）。<b>不要</b>手机号、微信授权、位置。</p>
+      <p class="body" style="margin-top:var(--s-3)">识别你靠一台仅保存在你设备上的随机编号（"我的标识"页可查看/复制/清空）。可选设置恢复口令：换设备/清缓存后凭口令找回口味记录，口令只存加盐哈希。</p>
+      <p class="body" style="margin-top:var(--s-3)">生成推荐用到 AI 服务时，只发送当晚口味标签摘要，不带编号原文。特殊饮食需求请遵医嘱。</p>
+      <button class="btn" id="btn-privacy-ok" data-track="privacy_ack" style="margin-top:var(--s-4)">知道了，开始</button>
+      <noscript><p class="cap-r">本页需要启用 JavaScript；以上隐私条款为完整存档文本。</p></noscript>
+    </div>
+  </div>
+</main>
+
+<!-- 原型控制台（非产品 UI；评审用） -->
+<details class="proto">
+  <summary>原型演示入口（评审用，非产品功能）</summary>
+  <div>
+    <a class="chip" href="#" id="d-revisit">演示回访卡</a>
+    <a class="chip" href="#" id="d-fakedoor">假门（M3）</a>
+    <a class="chip" href="#" id="d-dead">兜底页</a>
+    <a class="chip" href="#" id="d-reask">再问一轮（演示题）</a>
+    <p class="caption" style="margin-top:6px">本页为设计原型：无真实后端与深链；菜品与文案来自生产菜库留档；"再问一轮"题目为服务端 config 演示数据。埋点点位以 data-track 属性标注（对照 FR-15）。</p>
+  </div>
+</details>
+
+<div id="toast-root" aria-live="polite"></div>
+
+<script>
+"use strict";
+/* ===== 原型说明：无后端。事件以 data-track 标注＋console 存根（对照 FR-15）。 ===== */
+const $=(s)=>document.querySelector(s),$$=(s)=>[...document.querySelectorAll(s)];
+const track=t=>console.debug("[wte-track]",t); // 生产＝/api/events/batch
+const store={
+  get:k=>localStorage.getItem(k),set:(k,v)=>localStorage.setItem(k,v),del:k=>localStorage.removeItem(k)
+};
+let anon=store.get("wte_anon_id");
+if(!anon){anon="u-"+Math.random().toString(36).slice(2,12).padEnd(10,"0");store.set("wte_anon_id",anon);}
+$("#ticket-no").textContent="NO."+new Date().toISOString().slice(0,10).replace(/-/g,"");
+$("#anon-display").textContent=anon;
+
+/* ===== 菜库（真实留档文案；docs/execution/data/m0/poc2-llm-*.txt 与生产 template_copy） ===== */
+const POOL=[
+ {n:"酸辣汤",c:"酸辣汤——味道带劲，热汤落胃，就它了。"},
+ {n:"桂林卤菜米粉",c:"桂林卤菜米粉——出餐快不磨叽，三十以内管饱，就它了。"},
+ {n:"香菇滑鸡煲仔饭",c:"鸡肉嫩香菇鲜都不稀奇，那层焦脆锅巴才是灵魂，便宜但真不将就。"},
+];
+const FALLBACK={n:"辣椒炒肝",c:"辣椒炒肝——味道带劲，就它了。"};
+const TAGS=["不吃辣","想喝汤","不重样","预算30以下","清淡","重口味","想吃热乎","想吃冷的","要快","想慢享"];
+const COLD=[{q:"口味轻重？",o:["清淡为主","有味才爽","看心情"]},{q:"汤水偏好？",o:["爱喝汤","干香为主","都行"]},{q:"辣度？",o:["不吃辣","微辣","无辣不欢"]}];
+const state={resIdx:0,swaps:0,swapLimit:3,q2:null,step:"home"};
+
+/* ===== 视图切换 ===== */
+const VIEWS=["v-home","v-cold","v-quiz","v-wait","v-result","v-fallback","v-go","v-dead","v-identity","v-fakedoor"];
+function show(id){
+  VIEWS.forEach(v=>$("#"+v).classList.toggle("hidden",v!==id));
+  $$("#app > .view:not(.hidden)").forEach(el=>{el.classList.remove("view");void el.offsetWidth;el.classList.add("view");});
+  state.step=id;window.scrollTo(0,0);
+}
+function toast(msg){const t=document.createElement("div");t.className="toast";t.textContent=msg;$("#toast-root").replaceChildren(t);setTimeout(()=>t.remove(),2200);}
+
+/* ===== 灯箱片主题（§1.6） ===== */
+function applyTheme(){
+  const th=store.get("wte_theme"),se=store.get("wte_season");
+  const h=new Date().getHours();
+  const autoTh=h<5?"late":h<10?"morning":h<17?"noon":h<21?"evening":"late";
+  const m=new Date().getMonth()+1;
+  const autoSe=m<=2||m===12?"winter":m<=5?"spring":m<=8?"summer":"autumn";
+  document.documentElement.dataset.theme=th&&th!=="auto"?th:autoTh;
+  document.documentElement.dataset.season=se&&se!=="auto"?se:autoSe;
+  $$("#theme-slots .tag").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.themeSet===(th||"auto"))));
+  $$("#season-slots .tag").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.seasonSet===(se||"auto"))));
+}
+$$("#theme-slots .tag").forEach(b=>b.onclick=()=>{b.dataset.themeSet==="auto"?store.del("wte_theme"):store.set("wte_theme",b.dataset.themeSet);applyTheme();});
+$$("#season-slots .tag").forEach(b=>b.onclick=()=>{b.dataset.seasonSet==="auto"?store.del("wte_season"):store.set("wte_season",b.dataset.seasonSet);applyTheme();});
+applyTheme();
+if(matchMedia("(prefers-reduced-motion: reduce)").matches)document.documentElement.dataset.motion="off";
+
+/* ===== S1 隐私 ===== */
+function privacy(){ if(!store.get("wte_privacy_ack")) $("#v-privacy").classList.remove("hidden"); }
+$("#btn-privacy-ok").onclick=()=>{store.set("wte_privacy_ack","1");$("#v-privacy").classList.add("hidden");track("privacy_ack");};
+privacy();
+
+/* ===== S2 首屏＋S11 回访 ===== */
+function renderRevisit(){
+  const last=store.get("wte_last_dish"),day=store.get("wte_last_day");
+  const today=new Date().toDateString();
+  if(last&&day&&day!==today){
+    $("#revisit").classList.remove("hidden");
+    $("#revisit-q").textContent=`昨晚的『${last}』，还对味吗？`;
+    track("visit_exposure");
+  }
+}
+flashCards($("#revisit-tags"),["爱","一般","别提了"],"visit_answer","small");
+$$("#revisit-tags .flash-card").forEach(b=>b.onclick=()=>{
+  $$("#revisit-tags .flash-card").forEach(x=>{x.setAttribute("aria-pressed","false");x.classList.add("dim");});
+  b.setAttribute("aria-pressed","true");b.classList.remove("dim");
+  store.set("wte_last_day",new Date().toDateString());
+  $("#revisit-tags").classList.add("hidden");
+  const v=b.dataset.v;
+  $("#revisit-done").textContent=v==="别提了"?"记住了，下次绕开它。":"好嘞，这类给你记上。";
+  track("visit_answer");
+});
+$("#d-revisit").onclick=e=>{e.preventDefault();store.set("wte_last_dish",POOL[state.resIdx%POOL.length].n);store.set("wte_last_day","yesterday");renderRevisit();};
+
+/* ===== S3 画像（单词卡闯关：大竖卡·平涂插画·选中亮牌自动翻关） ===== */
+let coldIdx=0;const coldAns={};
+function bulbs(el,lit,total){el.innerHTML=Array.from({length:total},(_,i)=>`<i class="bulb${i<lit?" on":""}"></i>`).join("");}
+/* 平涂插画母题库（用户修订③：暂缓展示，只保留代码占位；恢复时接回 .art 容器——G8） */
+const ART={
+ "spicy":`<svg viewBox="0 0 120 110" aria-hidden="true"><g fill="var(--ink-1)"><rect x="14" y="38" width="92" height="14" rx="7"/><rect x="22" y="48" width="76" height="44" rx="12"/><rect x="6" y="48" width="10" height="14" rx="5"/><rect x="104" y="48" width="10" height="14" rx="5"/></g><g fill="var(--ink-1)"><circle cx="46" cy="66" r="4" fill="var(--bg-0)"/><circle cx="74" cy="66" r="4" fill="var(--bg-0)"/><path d="M50 74 Q60 83 70 74" stroke="var(--bg-0)" stroke-width="3.5" fill="none" stroke-linecap="round"/><circle cx="37" cy="73" r="4.5" fill="var(--r)" opacity=".5"/><circle cx="83" cy="73" r="4.5" fill="var(--r)" opacity=".5"/></g><g><path d="M18 18 q6 -8 12 0 q-6 8 -12 0Z" fill="var(--r)"/><rect x="28" y="12" width="9" height="4" rx="2" fill="var(--c)" transform="rotate(30 32 14)"/><path d="M97 14 l4 8 9 1 -6.5 6 1.5 9 -8-4.5 -8 4.5 1.5-9 -6.5-6 9-1Z" fill="var(--r)" opacity=".85"/><path d="M92 44 l3 7 7 1 -5 5 1 7 -6-3.5 -6 3.5 1-7 -5-5 7-1Z" fill="var(--r)" opacity=".55"/></g></svg>`,
+ "mild":`<svg viewBox="0 0 120 110" aria-hidden="true"><g fill="var(--ink-1)"><rect x="20" y="40" width="80" height="12" rx="6"/><path d="M24 52 Q60 100 96 52 Z"/><rect x="46" y="92" width="28" height="8" rx="4"/></g><g><circle cx="40" cy="47" r="3.5" fill="var(--r)"/><circle cx="60" cy="45" r="3.5" fill="var(--r)" opacity=".8"/><circle cx="80" cy="47" r="3.5" fill="var(--c)"/><path d="M98 22 q8 -4 10 4 q-8 6 -12 0Z" fill="var(--c)"/><path d="M20 24 l3 6 7 1 -5 4.5 1 7 -6-3.5 -6 3.5 1-7 -5-4.5 7-1Z" fill="var(--c)" opacity=".6"/></g><g><circle cx="48" cy="68" r="3.8" fill="var(--bg-0)"/><circle cx="72" cy="68" r="3.8" fill="var(--bg-0)"/><path d="M52 76 Q60 83 68 76" stroke="var(--bg-0)" stroke-width="3.2" fill="none" stroke-linecap="round"/><circle cx="40" cy="74" r="4" fill="var(--r)" opacity=".5"/><circle cx="80" cy="74" r="4" fill="var(--r)" opacity=".5"/></g></svg>`,
+ "noodle":`<svg viewBox="0 0 120 110" aria-hidden="true"><g stroke="var(--ink-1)" stroke-width="4" stroke-linecap="round"><path d="M34 26 q4 -12 0 -18"/><path d="M46 24 q4 -10 0 -16"/><path d="M86 26 q-4 -12 0 -18"/></g><g fill="var(--ink-1)"><rect x="18" y="34" width="84" height="12" rx="6"/><path d="M22 46 Q60 94 98 46 Z"/><rect x="104" y="10" width="4" height="30" rx="2" transform="rotate(14 106 25)"/><rect x="112" y="8" width="4" height="30" rx="2" transform="rotate(22 114 23)"/></g><g><circle cx="48" cy="64" r="3.8" fill="var(--bg-0)"/><circle cx="72" cy="64" r="3.8" fill="var(--bg-0)"/><path d="M52 72 Q60 79 68 72" stroke="var(--bg-0)" stroke-width="3.2" fill="none" stroke-linecap="round"/><circle cx="40" cy="70" r="4" fill="var(--r)" opacity=".5"/><circle cx="80" cy="70" r="4" fill="var(--r)" opacity=".5"/><path d="M92 78 l3 6 7 1 -5 4.5 1 7 -6-3.5 -6 3.5 1-7 -5-4.5 7-1Z" fill="var(--r)" opacity=".6"/></g></svg>`,
+ "box":`<svg viewBox="0 0 120 110" aria-hidden="true"><g fill="var(--ink-1)"><path d="M30 32 L90 32 L83 96 L37 96 Z"/><rect x="26" y="26" width="68" height="10" rx="5"/><rect x="72" y="2" width="4.5" height="26" rx="2" transform="rotate(16 74 15)"/><rect x="82" y="0" width="4.5" height="26" rx="2" transform="rotate(26 84 13)"/></g><g><circle cx="49" cy="62" r="4" fill="var(--bg-0)"/><circle cx="73" cy="62" r="4" fill="var(--bg-0)"/><path d="M53 70 Q61 78 69 70" stroke="var(--bg-0)" stroke-width="3.4" fill="none" stroke-linecap="round"/><circle cx="41" cy="68" r="4.2" fill="var(--r)" opacity=".5"/><circle cx="81" cy="68" r="4.2" fill="var(--r)" opacity=".5"/><path d="M14 22 l10 -14 -3 12 8 -2 -12 16 3 -10Z" fill="var(--r)"/></g></svg>`
+};
+function flashCards(el,opts,track,size){
+  el.classList.add("flash-grid");
+  el.classList.toggle("two",opts.length===2);
+  el.innerHTML=opts.map((o,i)=>`<button class="flash-card ${size}" style="--i:${i}" aria-pressed="false" data-v="${o}" data-track="${track}">${o}</button>`).join("");
+}
+function renderCold(){
+  const q=COLD[coldIdx];
+  bulbs($("#cold-bulbs"),coldIdx+1,COLD.length);
+  $("#cold-title").textContent=q.q;
+  flashCards($("#cold-opts"),q.o,"cold_start","big");
+  const qc=$("#cold-qcard");qc.classList.remove("qflip");void qc.offsetWidth;qc.classList.add("qflip");
+  $$("#cold-opts .flash-card").forEach(b=>b.onclick=()=>{
+    $$("#cold-opts .flash-card").forEach(x=>{x.setAttribute("aria-pressed","false");x.classList.add("dim");});
+    b.setAttribute("aria-pressed","true");b.classList.remove("dim");coldAns["p"+coldIdx]=b.dataset.v;track("cold_start");
+    setTimeout(()=>{coldIdx++;
+      if(coldIdx<COLD.length){renderCold();}
+      else{store.set("wte_profile_done","1");renderQuiz();show("v-quiz");}
+    },420);
+  });
+}
+$("#btn-start").onclick=()=>{track("session_start");
+  if(store.get("wte_profile_done")){renderQuiz();show("v-quiz");}
+  else{coldIdx=0;renderCold();show("v-cold");}
+};
+
+/* ===== S4 问卷（关1 标签单选卡·自适应收敛 → 关2 状态闪卡；全卷单选，owner 修订⑤） ===== */
+function convergeTags(){
+  const a=coldAns;let pool=[...TAGS];const pre=[];
+  if(a.p0==="清淡为主")pool=pool.filter(t=>t!=="重口味");
+  if(a.p0==="有味才爽")pool=pool.filter(t=>t!=="清淡");
+  if(a.p1==="爱喝汤")pre.push("想喝汤"); /* 已知偏好：保留卡片并预亮（可改） */
+  if(a.p2==="不吃辣")pool=pool.filter(t=>t!=="不吃辣"&&t!=="重口味");
+  if(a.p2==="微辣"||a.p2==="无辣不欢")pool=pool.filter(t=>t!=="不吃辣");
+  return{pool,pre,converged:pool.length<TAGS.length||pre.length>0};
+}
+function renderQuiz(){
+  $("#quiz-stage-tags").classList.remove("hidden");
+  $("#quiz-stage-q2").classList.add("hidden");
+  const {pool,pre,converged}=convergeTags();
+  $("#quiz-conv").textContent=(converged?"已按你的口味收敛 · ":"")+"选一个最讲究的，也可跳过";
+  const box=$("#quiz-tags");
+  box.classList.add("flash-grid");box.classList.toggle("two",false);
+  box.innerHTML=pool.map((t,i)=>`<button class="flash-card small" style="--i:${i}" aria-pressed="${pre.includes(t)}" data-v="${t}" data-track="answer">${t}</button>`).join("");
+  const go=$("#btn-quiz-go");go.disabled=!pre.length; /* 预亮＝已有默认选，可确认；无预亮则点卡即走 */
+  let locked=false;
+  $$("#quiz-tags .flash-card").forEach(b=>b.onclick=()=>{
+    if(locked)return;locked=true;
+    $$("#quiz-tags .flash-card").forEach(x=>{x.setAttribute("aria-pressed","false");x.classList.add("dim");});
+    b.setAttribute("aria-pressed","true");b.classList.remove("dim");
+    track("answer");setTimeout(goQ2,420);
+  });
+  if(!pool.length){go.disabled=true;goQ2();} /* 极端收敛：标签剔光 → 直接关2 */
+}
+function goQ2(){
+  track("answer");
+  $("#quiz-stage-tags").classList.add("hidden");
+  $("#quiz-stage-q2").classList.remove("hidden");
+  flashCards($("#quiz-q2-opts"),["累，要快","想犒劳自己"],"answer","big");
+  $$("#quiz-q2-opts .flash-card").forEach(b=>b.onclick=()=>{
+    $$("#quiz-q2-opts .flash-card").forEach(x=>{x.setAttribute("aria-pressed","false");x.classList.add("dim");});
+    b.setAttribute("aria-pressed","true");b.classList.remove("dim");state.q2=b.dataset.v;track("answer");
+    setTimeout(toWait,420);
+  });
+}
+$("#btn-quiz-go").onclick=goQ2;
+$("#btn-q2-skip").onclick=()=>{track("abandon");giveFallback();};
+$("#btn-giveup").onclick=()=>{track("abandon");giveFallback();};
+$("#btn-skip-all").onclick=()=>{track("abandon");giveFallback();};
+
+/* ===== S5 等待 → S6 揭晓 ===== */
+let clockTimer=null;
+function toWait(){
+  show("v-wait");const t0=performance.now();
+  $("#wait-clock").textContent="0.0s";
+  clockTimer=setInterval(()=>{$("#wait-clock").textContent=((performance.now()-t0)/1000).toFixed(1)+"s";},100);
+  setTimeout(()=>{
+    clearInterval(clockTimer);
+    state.resIdx=0;state.swaps=0;
+    renderResult(POOL[0]);show("v-result");
+    setTimeout(()=>{if(!store.get("wte_pwa_ack"))$("#pwa-tip").classList.remove("hidden");},1500);
+  },1100);
+}
+function renderResult(d){
+  const card=$("#res-card");
+  /* 灯箱点亮（§1.5：60ms 背景 bg-1→bg-3 一次切换；reduced-motion 直出） */
+  if(document.documentElement.dataset.motion!=="off"){
+    card.style.transition="background-color 60ms linear";
+    card.style.background="var(--bg-3)";
+    setTimeout(()=>{card.style.background="";},70);
+  }
+  card.classList.remove("flip");void card.offsetWidth;card.classList.add("flip");
+  $("#res-dish").textContent=d.n;$("#res-copy").textContent=d.c;
+  $("#res-degraded").classList.toggle("hidden",d!==FALLBACK);
+  $("#swap-left").textContent=state.swaps>=state.swapLimit?"（到顶）":`（剩 ${state.swapLimit-state.swaps}）`;
+  $("#btn-swap").disabled=state.swaps>=state.swapLimit;
+  track("result_served");track("recommend_exposure");
+}
+$("#btn-swap").onclick=()=>{
+  state.swaps++;track("swap");
+  if(state.swaps>=state.swapLimit){toast("今晚就这仨里挑了最配你的。");}
+  renderResult(POOL[state.swaps%POOL.length]);
+};
+$("#btn-reask").onclick=()=>{toast("演示：服务端下发追加一题（config）");track("re_ask");};
+$("#btn-neg").onclick=e=>{e.target.textContent="记住了，下次绕开";e.target.disabled=true;track("negative_feedback");};
+$("#btn-accept").onclick=()=>{store.set("wte_last_dish",$("#res-dish").textContent);store.set("wte_last_day",new Date().toDateString());track("accept");goGo($("#res-dish").textContent);};
+$("#btn-pwa-ok").onclick=()=>{store.set("wte_pwa_ack","1");$("#pwa-tip").classList.add("hidden");};
+
+/* ===== S7 弃答兜底 ===== */
+function giveFallback(){
+  $("#fb-dish").textContent=FALLBACK.n;$("#fb-copy").textContent=FALLBACK.c;
+  track("fallback_result");show("v-fallback");
+}
+$("#btn-fb-accept").onclick=()=>{store.set("wte_last_dish",FALLBACK.n);store.set("wte_last_day",new Date().toDateString());track("accept");goGo(FALLBACK.n);};
+$("#btn-fb-back").onclick=()=>{renderQuiz();show("v-quiz");};
+
+/* ===== S8 过渡 → S9 兜底（原型无真实深链，1s 后演示手动路径） ===== */
+function goGo(dish){$("#go-dish").textContent="『"+dish+"』";track("jump");show("v-go");setTimeout(()=>{$("#dead-dish").textContent=dish;show("v-dead");},1000);}
+$("#btn-copy-dish").onclick=async()=>{try{await navigator.clipboard.writeText($("#dead-dish").textContent);toast("菜名已复制。");}catch{toast("长按菜名手动复制。");}};
+$("#btn-dead-home").onclick=()=>{renderRevisit();show("v-home");};
+$("#d-dead").onclick=e=>{e.preventDefault();$("#dead-dish").textContent=POOL[0].n;show("v-dead");};
+
+/* ===== S10 身份 ===== */
+$("#btn-identity").onclick=()=>{show("v-identity");};
+$("#btn-id-back").onclick=()=>{renderRevisit();show("v-home");};
+$("#btn-copy-anon").onclick=async()=>{try{await navigator.clipboard.writeText(anon);toast("标识已复制。");}catch{toast("长按标识手动复制。");}};
+$("#btn-passcode").onclick=()=>{$("#passcode-err").textContent="原型未接后端——生产为 /api/identity/passcode（≥6 位、弱口令拒、5 错锁 24h）。";};
+$("#btn-wipe").onclick=()=>$("#wipe-confirm").classList.remove("hidden");
+$("#btn-wipe-no").onclick=()=>$("#wipe-confirm").classList.add("hidden");
+$("#btn-wipe-yes").onclick=()=>{["wte_anon_id","wte_privacy_ack","wte_profile_done","wte_pwa_ack","wte_last_dish","wte_last_day","wte_theme","wte_season"].forEach(store.del);$("#wipe-confirm").classList.add("hidden");location.reload();};
+
+/* ===== S12 假门 ===== */
+$("#d-fakedoor").onclick=e=>{e.preventDefault();show("v-fakedoor");track("fakedoor_expose");};
+$("#btn-fd-reg").onclick=()=>{$("#fd-done").classList.remove("hidden");track("fakedoor_register");};
+$("#btn-fd-back").onclick=()=>show("v-home");
+$("#d-reask").onclick=e=>{e.preventDefault();renderQuiz();show("v-quiz");};
+
+renderRevisit();
+show("v-home");
+</script>
+</body>
+</html>

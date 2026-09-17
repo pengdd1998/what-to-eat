@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block main %}
+
+<!-- 首访隐私弹窗：100% 覆盖（匿名说明/口令用途/一键清空） -->
+<div id="privacy-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="privacy-title">
+  <div class="card">
+    <p class="kicker">先说明一句</p>
+    <h2 id="privacy-title" tabindex="-1">我们怎么对待你的数据</h2>
+    <p class="copy">本站<b>不注册、不登录</b>：你看到的是一串匿名代号（在「我的身份」页可复制）。我们只记录你的<b>点单选择与反馈</b>，用来让推荐越用越准——<b>不收集任何个人身份信息</b>。天气建议仅根据<b>网络地址粗略推断所在城市</b>，不获取 GPS 精确定位，也不留存城市与你的关联。</p>
+    <p class="copy">设口令是为了<b>换手机/清缓存后还能找回这串代号和口味记忆</b>；随时可在「我的身份」页一键清空全部数据。</p>
+    <div class="row">
+      <button id="btn-privacy-ok" class="primary">我知道了，开始选餐</button>
+    </div>
+  </div>
+</div>
+
+<!-- 主页：开始屏 -->
+<section id="screen-start" class="card qwrap">
+  <p class="kicker">今天吃什么</p>
+  <h2 class="q-center">别刷外卖了，30 秒做出选择</h2>
+  <p class="copy">接下来几个轻松的小题，答完直接给你一个能点的菜。</p>
+  <div class="row">
+    <button id="btn-start" class="primary big">开始选餐</button>
+  </div>
+  <p id="taste-hint" class="hint num"></p>
+</section>
+
+<!-- 回访卡（FR-16/18；菜名回填＋三值反馈，服务端 ≤1 次/人/周频控） -->
+<div id="visit-card" class="card hidden" role="region" aria-label="昨晚回访">
+  <p id="visit-q" style="font-weight:700;margin:8px 0"></p>
+  <div class="row">
+    <button class="ghost visit-chip" data-v="satisfied">对味</button>
+    <button class="ghost visit-chip" data-v="neutral">一般</button>
+    <button class="ghost visit-chip" data-v="unsatisfied">别提了</button>
+  </div>
+  <p id="visit-done" class="hint hidden"></p>
+</div>
+
+<!-- 诚实假门（FR-17，M3；config.fakedoor.enabled 翻转才渲染——零联系字段） -->
+<div id="fakedoor-card" class="card hidden" role="region" aria-label="价值探针">
+  <p style="font-weight:700;margin:8px 0">
+    如果未来它收 <span id="fd-anchor">X</span> 元/月，这样的晚饭收口，你愿意买单吗？
+  </p>
+  <p class="hint">验证期完全免费 · 不发促销 · 不留任何联系方式</p>
+  <button id="fd-register" class="primary" style="margin-top:8px">愿意买单，登记一下</button>
+  <p id="fd-done" class="hint hidden">记下了。真到那天，第一个通知你。</p>
+</div>
+
+<!-- 答题屏：问题在上居中，选项卡牌在下方 -->
+<section id="screen-quiz" class="card hidden qwrap" aria-live="polite">
+  <p id="quiz-kicker" class="kicker">第 <span id="step-num" class="num">1</span> 步</p>
+  <h2 id="quiz-q" class="q-center" tabindex="-1">问题加载中…</h2>
+  <div id="quiz-cards" class="flash-grid" role="group" aria-label="选项"></div>
+  <div class="row">
+    <button id="btn-quit" class="linklike">就到这，先不选了</button>
+  </div>
+</section>
+
+<!-- 等待屏 -->
+<section id="screen-wait" class="card qwrap hidden">
+  <h2 class="q-center">正在为你生成选择…</h2>
+  <div class="bulbs" aria-hidden="true">
+    <span class="bulb on"></span><span class="bulb"></span><span class="bulb"></span>
+  </div>
+  <p class="hint">结合你的口味记忆算一个最合适的。</p>
+</section>
+
+<!-- 结果屏：翻牌动效揭晓，菜名 aria-live 播报 -->
+<section id="screen-result" class="card qwrap hidden flipwrap">
+  <div class="flip">
+    <p class="kicker">就吃这个</p>
+    <h2 id="dish-name" aria-live="assertive">…</h2>
+    <p id="dish-reason" class="copy"></p>
+    <p id="dish-tags" class="tagsline" aria-hidden="true"></p>
+    <div class="row">
+      <button id="btn-accept" class="primary big">就吃这个，记下来</button>
+    </div>
+    <div class="row">
+      <button id="btn-again" class="linklike">再帮我想一个</button>
+    </div>
+    <div class="row">
+      <a class="ghost" href="/memory" style="text-decoration:none;align-items:center;justify-content:center;display:flex">去记一下我喜不喜欢它</a>
+    </div>
+  </div>
+</section>
+
+{% endblock %}
+{% block scripts %}
+<script src="/static/app.js?v={{ version }}h"></script>
+{% endblock %}

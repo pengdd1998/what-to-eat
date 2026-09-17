@@ -1,0 +1,227 @@
+/* 「吃什么」生产样式——C「街角灯箱」设计系统（docs/design/design-system.md，拍板 2026-09-03）
+   集成纪律（refinement preserves）：交互逻辑、功能文案、埋点点位三不动。
+   本文件＝设计 token＋组件化重皮；reduced-motion 全尊重。
+   主题：data-theme=night＝暗夜暖灯（默认）；data-theme=day＝奶油暖色。 */
+:root{
+  --bg-0:#0F1F18;--bg-1:#14281F;--bg-2:#1B3327;--bg-3:#24402F;
+  --ink-1:#F2EFE6;--ink-2:#A8B5A3;--ink-3:#6E8274;
+  --y:#FFC53D;--y-ink:#101A14;--r:#FF8A6E;--c:#3DDAD7;
+  --line:#2A4436;--focus:#3DDAD7;--sticker-bd:#FFC53D;
+  --s-2:8px;--s-3:12px;--s-4:16px;--s-5:20px;--s-6:24px;
+  --r-card:12px;--r-btn:12px;
+  --shadow-pop:0 4px 0 rgba(0,0,0,.5);
+  --shadow-press:0 1px 0 rgba(0,0,0,.5);
+  --t-press:90ms cubic-bezier(.3,0,.7,.4);
+  --t-flip:240ms cubic-bezier(.2,.7,.3,1.12);
+  --t-lit:60ms linear;
+  --t-fade:160ms ease-out;
+  --ok:#7bc47f;
+}
+/* 白天（6:00~18:00）奶油暖色 */
+[data-theme="day"]{
+  --bg-0:#F4E9D6;--bg-1:#FFF8EC;--bg-2:#FBEFD9;--bg-3:#F3E2C4;
+  --ink-1:#3A2C1A;--ink-2:#7A6647;--ink-3:#A8946F;
+  --y:#E8862E;--y-ink:#FFF8EC;--r:#C0492B;--c:#2E8A86;
+  --line:#E4D3B3;--focus:#2E8A86;--sticker-bd:#E8862E;
+  --shadow-pop:0 4px 0 rgba(120,90,40,.25);
+  --shadow-press:0 1px 0 rgba(120,90,40,.25);
+}
+body[data-theme="day"]{background:var(--bg-0);color:var(--ink-1)}
+body[data-theme="day"] input{background:#fff;color:var(--ink-1);border-color:var(--line)}
+body[data-theme="day"] code{background:#F3E2C4;color:var(--ink-1)}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg-0);color:var(--ink-1);
+  font:400 16px/1.6 -apple-system,"PingFang SC","HarmonyOS Sans SC","MiSans",
+    "Source Han Sans SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif;
+  min-height:100vh}
+::selection{background:var(--y);color:var(--y-ink)}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:4px}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+  transition:transform var(--t-press),box-shadow var(--t-press),
+    background-color var(--t-lit),opacity var(--t-fade)}
+.hidden{display:none!important}
+.num{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  font-variant-numeric:tabular-nums}
+.wrap{max-width:420px;margin:0 auto;
+  /* padding-bottom＝fixed 导航让位（2026-09-16 终版回退：fixed 由合成层锚视口，
+     无 sticky 在 URL 栏收展下的惰性重排滞后——多层补丁（dvh/svh/锁高/sticky）
+     全部撤销，回到 fixed＋实色背景的最简稳定形态） */
+  padding:var(--s-5) var(--s-5) 72px}
+header h1{margin:8px 0 0;font-size:22px;font-weight:900;letter-spacing:.02em}
+.sub{margin:0 0 var(--s-4);color:var(--ink-2);font-size:13px}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+
+/* 贴纸卡（灯箱面） */
+.card{position:relative;background:var(--bg-1);
+  border:3px solid var(--sticker-bd);border-radius:var(--r-card);
+  box-shadow:var(--shadow-pop);padding:var(--s-5);margin:var(--s-3) 0}
+.modal{position:fixed;inset:0;background:rgba(6,12,9,.6);display:flex;
+  align-items:flex-end;justify-content:center;z-index:40}
+.modal .card{width:100%;max-width:420px;border-radius:var(--r-card)
+  var(--r-card) 0 0;padding:var(--s-6) var(--s-5)}
+.kicker{display:inline-block;background:var(--y);color:var(--y-ink);
+  border-radius:8px;padding:4px 12px;font-weight:900;font-size:14px;
+  letter-spacing:.06em;margin:var(--s-5) 0 0}
+
+/* 按钮（≥44px 触达） */
+.primary,.ghost,.linklike{display:flex;align-items:center;justify-content:center;
+  width:100%;min-height:52px;padding:12px var(--s-4);border-radius:var(--r-btn)}
+.primary{background:var(--y);color:var(--y-ink);font-weight:900;font-size:17px;
+  letter-spacing:.08em;border:3px solid var(--y-ink);box-shadow:var(--shadow-pop)}
+.primary:active{transform:translateY(3px);box-shadow:var(--shadow-press)}
+.primary:disabled{opacity:.45;pointer-events:none}
+.ghost{border:2px solid var(--line);color:var(--ink-1);font-weight:500;
+  font-size:14px;min-height:48px;white-space:nowrap;padding:12px 8px}
+.ghost:active{transform:translateY(2px);background:var(--bg-2)}
+.ghost:disabled{opacity:.4;pointer-events:none}
+.linklike{width:auto;min-height:44px;background:none;color:var(--r);
+  font-size:13px;text-decoration:underline;text-underline-offset:3px;padding:0 var(--s-2)}
+.linklike:disabled{opacity:.6;pointer-events:none}
+.danger{background:#5c1f1f;color:#ffd9d9}
+.row{display:flex;gap:var(--s-3);margin:var(--s-3) 0;align-items:center}
+.row button{flex:1}
+.big{font-size:19px;padding:16px}
+
+/* 文案 */
+.q{font-weight:700;margin:var(--s-2) 0}
+.copy{font-size:16px;line-height:1.6;margin:var(--s-3) 0}
+.hint{color:var(--ink-2);font-size:13px;line-height:1.5}
+.disclaimer{color:var(--ink-2);font-size:11px}
+.links a{color:var(--ink-2);font-size:13px}
+footer{margin-top:16px}
+.disclaimer{font-size:11px;color:var(--dim);margin:0}
+code{background:#000;padding:8px 10px;border-radius:8px;font-size:12px;
+  word-break:break-all;flex:1}
+input{background:#000;border:1px solid #333;color:var(--ink-1);border-radius:10px;
+  padding:12px;flex:1;font-size:16px}
+label{font-size:13px;color:var(--ink-2);display:block;margin:10px 0 4px}
+#dish-name{font-size:30px;line-height:1.2;margin:4px 0 8px;font-weight:900}
+
+/* 旧类保留（re-ask 兼容渲染路径） */
+.choice{display:block;width:100%;text-align:left;min-height:52px;
+  border:2px solid var(--line);border-radius:var(--r-btn);padding:12px 16px;
+  background:var(--bg-1);font-size:16px}
+.choice.on{background:var(--y);color:var(--y-ink);border-color:var(--y);font-weight:900}
+.tag{display:inline-block;background:var(--bg-1);border-radius:999px;
+  padding:8px 14px;margin:6px 4px;font-size:15px;cursor:pointer;
+  border:2px solid var(--line)}
+.tag.on{background:var(--y);color:var(--y-ink);border-color:var(--y);font-weight:900}
+#quiz-body .q{margin:14px 0 4px;color:var(--ink-2);font-size:14px}
+
+/* 单词卡闯关（设计拍板＋owner 修订①—⑤：全卷单选卡牌） */
+.qwrap{display:flex;flex-direction:column;align-items:center;text-align:center;
+  gap:var(--s-4);padding-top:var(--s-3)}
+.q-center{display:inline-flex;align-items:center;gap:14px;text-align:center;
+  font-weight:900;font-size:24px;line-height:1.35;margin:var(--s-2) 0}
+.q-center::before,.q-center::after{content:"";width:20px;height:4px;
+  border-radius:2px;background:var(--y);flex:none}
+.bulbs{display:flex;gap:10px;justify-content:center}
+.bulb{width:12px;height:12px;border-radius:50%;border:2px solid var(--line)}
+.bulb.on{background:var(--y);border-color:var(--y)}
+.flash-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s-3);
+  width:100%;margin:var(--s-3) 0}
+.flash-grid.two{grid-template-columns:repeat(2,1fr)}
+.flash-grid.one{grid-template-columns:minmax(0,280px);justify-content:center}
+/* 卡牌：出现弹出 → 待选悬浮 → 选中高亮脉冲 → 结束下滑退场（全 CSS；reduced-motion 由全局禁用覆盖） */
+.flash-card{display:flex;align-items:center;justify-content:center;text-align:center;
+  min-height:76px;padding:12px 8px;border-radius:var(--r-card);
+  border:2px solid var(--line);background:var(--bg-1);
+  font-weight:700;font-size:16px;box-shadow:var(--shadow-pop);
+  transition:transform var(--t-press),background-color var(--t-lit),
+    color var(--t-lit),border-color var(--t-lit);
+  animation:pop 260ms cubic-bezier(.2,.7,.3,1.18) both,
+    float 2.8s ease-in-out infinite;
+  animation-delay:calc(var(--i,0)*40ms), calc(500ms + var(--i,0)*-350ms)}
+@keyframes pop{0%{opacity:0;transform:translateY(18px) scale(.85)}
+  65%{opacity:1;transform:translateY(-4px) scale(1.04)}
+  100%{opacity:1;transform:none}}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+.flash-card:active{transform:translateY(2px)}
+.flash-card[aria-pressed="true"]{background:var(--y);color:var(--y-ink);
+  border-color:var(--y);font-weight:900;transform:translateY(-2px);
+  animation:sel-pulse 340ms cubic-bezier(.2,.7,.3,1.12) both}
+.flash-card.dim{opacity:.55;animation:none}
+@keyframes sel-pulse{0%{transform:scale(1)}
+  45%{transform:scale(1.05) translateY(-4px);
+    box-shadow:0 0 0 8px rgba(255,197,61,.22), var(--shadow-pop)}
+  100%{transform:translateY(-2px) scale(1);box-shadow:var(--shadow-pop)}}
+.flash-grid.out .flash-card{animation:out-down 240ms ease-in both;
+  animation-delay:calc(var(--i,0)*24ms)}
+@keyframes out-down{from{opacity:1}to{opacity:0;transform:translateY(46px)}}
+.flash-card.big{min-height:150px;font-size:19px;font-weight:900;color:var(--y);
+  letter-spacing:.04em}
+.flash-card.big[aria-pressed="true"]{color:var(--y-ink)}
+.flip{animation:rise var(--t-flip) both}
+@keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+/* 2026-09-16 结果页反复显示错位根治：原 3D 翻牌（perspective+rotateX both）在
+   结果页常驻 3D 渲染上下文，与 fixed 导航在该设备 GPU 上合成层错位（rect 正确
+   但渲染脱节，五轮 rect 测量盲区）。改 2D 淡入上移，保留揭晓仪式感，去 3D。 */
+
+/* 扇形排列：选项 >3 个时卡牌错开成扇（单屏单焦点，仍各卡可点） */
+.flash-grid.fan{display:flex;flex-wrap:wrap;justify-content:center;gap:var(--s-3)}
+.flash-grid.fan .flash-card{flex:1 1 40%;min-width:120px}
+.flash-grid.fan .flash-card:nth-child(1){transform:rotate(-3deg)}
+.flash-grid.fan .flash-card:nth-child(2){transform:rotate(2deg)}
+.flash-grid.fan .flash-card:nth-child(3){transform:rotate(-1deg)}
+.flash-grid.fan .flash-card:nth-child(4){transform:rotate(3deg)}
+.flash-grid.fan .flash-card[aria-pressed="true"]{transform:none}
+
+/* 味觉记忆页 */
+.memrow{border-top:2px solid var(--line);padding:var(--s-3) 0}
+.memrow:first-child{border-top:none}
+.memmeta{display:flex;justify-content:space-between;align-items:baseline;gap:var(--s-3)}
+.memmeta strong{font-size:17px}
+.fbrow{display:flex;gap:var(--s-2);margin-top:var(--s-2)}
+.fb{flex:1;min-height:44px;border:2px solid var(--line);border-radius:var(--r-btn);
+  background:var(--bg-1);font-size:14px;font-weight:700;padding:10px 4px}
+.fb.on{background:var(--y);color:var(--y-ink);border-color:var(--y)}
+
+/* 味觉记忆：多维度筛选条 */
+.filters{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:var(--s-3) 0}
+.filters input[type=search]{grid-column:1 / -1}
+.filters select{min-height:44px;background:var(--bg-1);color:var(--ink-1);
+  border:1.5px solid var(--line);border-radius:10px;padding:8px 10px;font-size:14px}
+.filters input[type=search]{min-height:44px}
+
+/* 吸底主导航（常驻可见，不随长内容滚走；兜底出口 + 触达≥44px） */
+.footnav{position:fixed;left:0;right:0;bottom:0;z-index:30;
+  display:flex;gap:var(--s-2);justify-content:center;
+  padding:8px max(var(--s-4), env(safe-area-inset-right))
+          max(8px, env(safe-area-inset-bottom))
+          max(var(--s-4), env(safe-area-inset-left));
+  /* 真机修复 2026-09-15：backdrop-filter+color-mix 在 Android Chrome 触发 fixed
+     渲染不跟随视口（结果屏撑高页面后 footnav 被"挤下去"，滚动一次才归位）——
+     改实色背景（主题变量，昼/夜自适应），弃玻璃模糊保稳定。 */
+  background:var(--bg-0);border-top:2px solid var(--line)}
+.footnav a{flex:0 1 160px;max-width:180px;min-height:48px;display:flex;
+  align-items:center;justify-content:center;padding:0 var(--s-4);
+  border:2px solid var(--line);border-radius:var(--r-btn);color:var(--ink-1);
+  text-decoration:none;font-size:14px;font-weight:700;background:var(--bg-1)}
+.footnav a[aria-current]{background:var(--y);color:var(--y-ink);border-color:var(--y)}
+/* 内容区底部留白，避免被固定导航遮住 */
+.tagsline{color:var(--ink-2);font-size:13px}
+
+/* 味觉记忆：完整答题路径回放（问题带编号，选项做方框） */
+.path{margin:var(--s-2) 0;font-size:13px}
+.path>summary{cursor:pointer;color:var(--ink-2);min-height:44px;display:flex;
+  align-items:center}
+.qstep{padding:var(--s-3) 0;border-top:1px dashed var(--line)}
+.qstep-q{margin:0 0 8px;font-weight:700;font-size:14px;display:flex;
+  align-items:center;gap:8px}
+.qno{display:inline-flex;align-items:center;justify-content:center;width:22px;
+  height:22px;border-radius:6px;background:var(--bg-3);color:var(--ink-1);
+  font-size:12px;font-weight:900;flex:none}
+.qstep-opts{list-style:none;margin:0;padding:0;display:grid;
+  grid-template-columns:1fr 1fr;gap:6px}
+.optbox{display:flex;align-items:center;gap:8px;border:1.5px solid var(--line);
+  border-radius:8px;padding:8px 10px;font-size:13px;color:var(--ink-2);
+  background:var(--bg-0)}
+.opt-dot{flex:none;font-size:13px;line-height:1;color:var(--ink-3)}
+.opt-text{flex:1}
+.optbox.picked{border-color:var(--y);background:var(--y);color:var(--y-ink);
+  font-weight:700}
+.optbox.picked .opt-dot{color:var(--y-ink)}

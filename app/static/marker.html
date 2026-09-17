@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>标识持久性标记页（T0.6/E-PoC-1）</title>
+<style>
+body{font:-apple-system,"PingFang SC",sans-serif;background:#111;color:#eee;
+  max-width:480px;margin:0 auto;padding:20px;line-height:1.7}
+code{display:block;background:#000;padding:14px;border-radius:10px;
+  font-size:15px;word-break:break-all;margin:8px 0}
+.small{color:#999;font-size:13px}
+button{background:#ff8a3d;color:#1b1208;border:0;border-radius:10px;
+  padding:12px 18px;font-size:16px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+td,th{border:1px solid #333;padding:6px;text-align:left}
+</style>
+</head>
+<body>
+<h2>标识持久性 · 3 天实测</h2>
+<p class="small">用途：RSK-1/E-PoC-1——验证微信 webview 内 localStorage 标识跨会话存活
+（ADR-002 E 判断 1；判读 W2 D1）。部署到目标域名后，在微信内打开本页开始。</p>
+
+<h3>我的标识</h3>
+<code id="mid">…</code>
+<button id="copy">复制标识</button>
+
+<h3>每日速查记录</h3>
+<table id="log">
+  <tr><th>日期</th><th>标识前 6 位</th><th>是否一致</th></tr>
+</table>
+<p class="small">每天晚餐前打开本页一次，点击下方按钮记一行；若标识变化，立即在
+结果表标注当日做过的操作。</p>
+<button id="check">今天的速查：标识未变 ✓</button>
+<button id="changed">标识变了 ✗</button>
+
+<h3>adverse 操作清单（每日任做其一，做完再速查）</h3>
+<p class="small">杀微信进程 / 微信重启 / 微信版本升级 / 清手机浏览器缓存（**不要**
+清微信存储——那是已知会清除的边界情形，单独最后一天测并标注）。</p>
+
+<h3>结果判定（ADR-002 E 判断 1 通过标准）</h3>
+<p class="small">3 天内全部常规操作后标识保持一致 → 通过；"清微信存储"清除 → 记为
+已知边界＋触发 D-15/D-17 口令恢复路径。逐日结果抄录到
+docs/execution/data/m0/webview-persistence-log.csv。</p>
+
+<script>
+const KEY = "wte_persistence_marker";
+let mid = localStorage.getItem(KEY);
+if (!mid) {
+  mid = "m-" + (crypto.randomUUID ? crypto.randomUUID() : Date.now() + "" + Math.random())
+    .replace(/-/g, "").slice(0, 20);
+  localStorage.setItem(KEY, mid);
+  localStorage.setItem(KEY + "_born", new Date().toISOString());
+}
+document.getElementById("mid").textContent = mid;
+const log = JSON.parse(localStorage.getItem(KEY + "_log") || "[]");
+function render() {
+  const t = document.getElementById("log");
+  t.innerHTML = "<tr><th>日期</th><th>标识前 6 位</th><th>是否一致</th></tr>" +
+    log.map(r => `<tr><td>${r.d}</td><td>${r.m}</td><td>${r.ok ? "✓" : "✗ 变了"}</td></tr>`)
+     .join("");
+}
+function record(ok) {
+  const _now = new Date();
+  const _d = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;  // 本地日期（非 UTC——跨午夜速查归当日）
+  log.push({d: _d, m: mid.slice(0, 6), ok});
+  localStorage.setItem(KEY + "_log", JSON.stringify(log));
+  render();
+}
+document.getElementById("check").onclick = () => record(true);
+document.getElementById("changed").onclick = () => record(false);
+document.getElementById("copy").onclick = (e) => {
+  navigator.clipboard.writeText(mid); e.target.textContent = "已复制";
+};
+render();
+</script>
+</body>
+</html>

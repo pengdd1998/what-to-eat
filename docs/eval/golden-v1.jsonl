@@ -1,0 +1,30 @@
+{"dimension": "noodle-soup", "question": "汤汤水水来一碗？面还是粉？", "options": [{"id": "o1", "text": "牛肉面这种扎实浇头", "tags": ["面食", "汤", "肉"]}, {"id": "o2", "text": "清汤简约一碗", "tags": ["面食", "汤", "清淡"]}], "should_stop": false}
+{"dimension": "noodle-soup", "question": "酸辣开胃那一挂要吗？", "options": [{"id": "o1", "text": "酸辣粉走起", "tags": ["米粉", "酸辣", "开胃"]}, {"id": "o2", "text": "清汤面也行", "tags": ["面食", "汤", "清淡"]}], "should_stop": false}
+{"dimension": "rice-bowl", "question": "饭怎么个吃法？", "options": [{"id": "o1", "text": "荤菜盖上去", "tags": ["米饭", "肉", "下饭"]}, {"id": "o2", "text": "素净点蛋炒时蔬", "tags": ["米饭", "清淡"]}], "should_stop": false}
+{"dimension": "rice-bowl", "question": "锅气炒饭还是异国风味？", "options": [{"id": "o1", "text": "扬州炒饭锅气足", "tags": ["米饭", "炒", "镬气"]}, {"id": "o2", "text": "咖喱牛丼来一碗", "tags": ["米饭", "咖喱"]}], "should_stop": false}
+{"dimension": "filled", "question": "想来点带馅儿的？怎么做的？", "options": [{"id": "o1", "text": "水饺一碗汤里游", "tags": ["带馅", "汤"]}, {"id": "o2", "text": "锅贴生煎焦底香", "tags": ["带馅", "酥脆"]}], "should_stop": false}
+{"dimension": "filled", "question": "蒸笼派还是煎烙派？", "options": [{"id": "o1", "text": "小笼烧麦蒸笼派", "tags": ["带馅", "清淡"]}, {"id": "o2", "text": "锅贴盒子煎烙派", "tags": ["带馅", "酥脆"]}], "should_stop": false}
+{"dimension": "noodle-dry", "question": "不带汤的干香款？热拌还是凉吃？", "options": [{"id": "o1", "text": "热干面炸酱面热拌", "tags": ["面食", "浓郁"]}, {"id": "o2", "text": "凉皮凉面爽一把", "tags": ["凉拌", "清爽"]}], "should_stop": false}
+{"dimension": "noodle-dry", "question": "饼卷堡夹管饱要吗？", "options": [{"id": "o1", "text": "肉夹馍管饱", "tags": ["饼类", "肉"]}, {"id": "o2", "text": "手抓饼卷一切", "tags": ["饼类", "香"]}], "should_stop": false}
+{"dimension": "meat-stir", "question": "灶上快炒一盘？下饭还是温和？", "options": [{"id": "o1", "text": "小炒肉那种下饭的", "tags": ["炒", "下饭", "微辣"]}, {"id": "o2", "text": "番茄炒蛋温和款", "tags": ["炒", "酸甜", "不辣"]}], "should_stop": false}
+{"dimension": "meat-stir", "question": "锅气小炒口味站哪边？", "options": [{"id": "o1", "text": "回锅肉重口下饭", "tags": ["炒", "浓郁"]}, {"id": "o2", "text": "糖醋里脊温和款", "tags": ["炒", "酸甜"]}], "should_stop": false}
+{"dimension": "meat-braise", "question": "炖到酥烂的慢工菜，哪一系？", "options": [{"id": "o1", "text": "红烧肉拌饭", "tags": ["炖卤", "浓郁", "甜口"]}, {"id": "o2", "text": "黄焖鸡带汤", "tags": ["炖卤", "微辣", "下饭"]}], "should_stop": false}
+{"dimension": "meat-braise", "question": "牛腩一煲要不要？", "options": [{"id": "o1", "text": "牛腩煲软烂入味", "tags": ["炖卤", "汤", "暖"]}, {"id": "o2", "text": "酱大骨啃着过瘾", "tags": ["炖卤", "肉", "香"]}], "should_stop": false}
+{"dimension": "meat-grill", "question": "焦香解馋路线？", "options": [{"id": "o1", "text": "烤鸡炸鸡酥脆", "tags": ["烤", "酥脆", "香"]}, {"id": "o2", "text": "牛排猪排厚实", "tags": ["烤", "浓郁"]}], "should_stop": false}
+{"dimension": "meat-grill", "question": "烤鱼微辣带汤要不要？", "options": [{"id": "o1", "text": "炭火烤鱼走起", "tags": ["鱼鲜", "微辣"]}, {"id": "o2", "text": "纸包鱼嫩滑", "tags": ["鱼鲜", "香"]}], "should_stop": false}
+{"dimension": "meat-fish", "question": "鱼鲜来一盆？哪种汤底？", "options": [{"id": "o1", "text": "酸菜鱼酸辣开胃", "tags": ["鱼鲜", "酸辣", "开胃"]}, {"id": "o2", "text": "番茄鱼酸甜温和", "tags": ["鱼鲜", "番茄", "酸甜"]}], "should_stop": false}
+{"dimension": "meat-fish", "question": "水煮沸腾系敢不敢？", "options": [{"id": "o1", "text": "水煮鱼麻辣到底", "tags": ["鱼鲜", "麻辣", "爆辣"]}, {"id": "o2", "text": "豆花鱼嫩滑折中", "tags": ["鱼鲜", "嫩"]}], "should_stop": false}
+{"dimension": "pot-soup", "question": "就想喝口热汤？浓煲还是清汤？", "options": [{"id": "o1", "text": "排骨猪肚鸡浓汤", "tags": ["汤", "肉", "暖"]}, {"id": "o2", "text": "清淡素汤也舒服", "tags": ["汤", "蔬菜", "清淡"]}], "should_stop": false}
+{"dimension": "pot-soup", "question": "砂锅鱼头豆腐来一锅？", "options": [{"id": "o1", "text": "砂锅鱼头豆腐鲜掉眉", "tags": ["鱼鲜", "鲜"]}, {"id": "o2", "text": "上汤娃娃菜也行", "tags": ["汤", "蔬菜", "清淡"]}], "should_stop": false}
+{"dimension": "pot-tang", "question": "一锅烫煮自选？", "options": [{"id": "o1", "text": "麻辣烫冒菜一碗端", "tags": ["烫煮", "麻辣"]}, {"id": "o2", "text": "串串钵钵鸡冷吃", "tags": ["烫煮", "麻辣", "凉拌"]}], "should_stop": false}
+{"dimension": "pot-tang", "question": "一人小火锅要不要？", "options": [{"id": "o1", "text": "一人旋转小火锅", "tags": ["烫煮", "暖"]}, {"id": "o2", "text": "关东煮暖暖一锅", "tags": ["烫煮", "汤"]}], "should_stop": false}
+{"dimension": "pot-congee", "question": "稀软暖胃路线？", "options": [{"id": "o1", "text": "皮蛋瘦肉砂锅粥", "tags": ["粥", "肉", "鲜"]}, {"id": "o2", "text": "清粥小菜养养胃", "tags": ["粥", "清淡"]}], "should_stop": false}
+{"dimension": "pot-congee", "question": "砂锅粥还是白粥？", "options": [{"id": "o1", "text": "砂锅虾粥料足", "tags": ["粥", "鲜", "肉"]}, {"id": "o2", "text": "白粥配小菜简单", "tags": ["粥", "清淡"]}], "should_stop": false}
+{"dimension": "light-cold", "question": "凉拌当正餐？荤凉还是素凉？", "options": [{"id": "o1", "text": "口水鸡荤凉下饭", "tags": ["凉拌", "肉", "开胃"]}, {"id": "o2", "text": "凉皮拍黄瓜素凉", "tags": ["凉拌", "蔬菜", "清爽"]}], "should_stop": false}
+{"dimension": "light-cold", "question": "捞汁系要不要？", "options": [{"id": "o1", "text": "捞汁小海鲜开胃", "tags": ["凉拌", "开胃", "鱼鲜"]}, {"id": "o2", "text": "凉拌木耳爽口", "tags": ["凉拌", "蔬菜", "清爽"]}], "should_stop": false}
+{"dimension": "light-salad", "question": "清爽冷轻食？", "options": [{"id": "o1", "text": "波奇谷物碗料足", "tags": ["鱼鲜", "清爽"]}, {"id": "o2", "text": "三明治饭团管饱", "tags": ["饼类", "清爽"]}], "should_stop": false}
+{"dimension": "light-salad", "question": "沙拉口味选哪种？", "options": [{"id": "o1", "text": "凯撒沙拉经典", "tags": ["清爽", "香"]}, {"id": "o2", "text": "金枪鱼沙拉厚实", "tags": ["鱼鲜", "清爽"]}], "should_stop": false}
+{"dimension": "light-snack", "question": "不求吃饱求过瘾？哪一系？", "options": [{"id": "o1", "text": "炸物酥脆", "tags": ["酥脆", "香"]}, {"id": "o2", "text": "卤味开胃", "tags": ["炖卤", "开胃"]}], "should_stop": false}
+{"dimension": "light-snack", "question": "串串烤物来点？", "options": [{"id": "o1", "text": "烤串滋滋冒油", "tags": ["烤", "香"]}, {"id": "o2", "text": "烤肠一口一个", "tags": ["烤", "解馋"]}], "should_stop": false}
+{"dimension": "light-dimsum", "question": "点心小口精致款？蒸笼还是肠粉？", "options": [{"id": "o1", "text": "小笼蒸饺一屉", "tags": ["带馅", "清淡"]}, {"id": "o2", "text": "肠粉滑嫩", "tags": ["鲜", "清淡"]}], "should_stop": false}
+{"dimension": "light-dimsum", "question": "茶点怎么配？", "options": [{"id": "o1", "text": "虾饺凤爪经典", "tags": ["带馅", "鲜"]}, {"id": "o2", "text": "奶黄包收尾甜口", "tags": ["点心", "甜口"]}], "should_stop": false}

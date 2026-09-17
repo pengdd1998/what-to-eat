@@ -1,0 +1,26 @@
+# —— 环境与构建 ——
+.venv/
+__pycache__/
+*.pyc
+logs/
+.env
+node_modules/
+
+# —— 数据与备份 ——
+*.db
+*.db-wal
+*.db-shm
+data/
+*.tgz
+
+# —— 本地滞留：不入公开树的敏感/低值内容（ci-cd-plan §2.3 D4）——
+poc/
+.impeccable/
+.video_agent
+.zcode/
+
+# —— 嵌套仓：运维正本（私有）三棵子树＋内层 .git ——
+docs/execution/
+docs/reverse/
+docs/ops-private/
+docs/.git/

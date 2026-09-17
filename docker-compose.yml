@@ -1,0 +1,72 @@
+# 「吃什么」T0.2 骨架 compose（落地方案 §1.1：api + cron(+umami+umami-db)；caddy＝无状态边缘）
+# 占位声明（2026-09-03 本人授权"先编码、阻塞项占位"）：
+#  - edge（caddy）：域名/TLS/公网 403 规则＝X5 载体重评未决，仅 profile 占位，勿在生产用
+#  - umami/umami-db：T1.6（游标重放式双写）落位后启用
+#  - cron：T1.5/T1.7（批产、探活、日表）落位后启用
+services:
+  api:
+    build:
+      context: .
+      args:
+        GIT_SHA: ${GIT_SHA:-dev}
+    image: what-to-eat/api:${GIT_SHA:-dev}
+    ports:
+      - "127.0.0.1:8881:8000"  # 域名已正式启用：8881 降回环（SSH 隧道备用入口）
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]
+    # forwarded-allow-ips=* 安全前提：api 对宿主仅回环发布，公网唯一入口是 caddy（同 compose 网内）
+    environment:
+      WTE_DB_PATH: /data/app.db
+      GO_SECRET: ${GO_SECRET:-}       # 生产注入 ≥32 字节随机（SUP-02；空则代码内 dev 兜底并告警）
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+    volumes:
+      - api-data:/data
+      # ip2region 离线库（IP→市级，天气用）：宿主 data/ 只读挂入，仓库不含二进制
+      - ./data/ip2region.xdb:/app/ip2region.xdb:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=2)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  admin:
+    # 内网面（§4.1 评审 8）：与公共面物理分离，仅宿主机回环可达（SSH 隧道访问）；
+    # 公网 /api/admin 403 已由 caddy edge 落地（第三层）。ADMIN_TOKEN 必须注入。
+    build:
+      context: .
+      args:
+        GIT_SHA: ${GIT_SHA:-dev}
+    image: what-to-eat/api:${GIT_SHA:-dev}
+    command: ["uvicorn", "app.admin:admin_app", "--host", "0.0.0.0", "--port", "8001"]
+    ports:
+      - "127.0.0.1:8001:8001"
+    environment:
+      WTE_DB_PATH: /data/app.db
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}   # 生产注入 ≥64 字符随机值（SUP-02）
+    volumes:
+      - api-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8001/api/health', timeout=2)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  edge:
+    image: caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  api-data:
+  caddy-data:
+  caddy-config:
