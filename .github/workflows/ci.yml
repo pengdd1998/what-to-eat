@@ -51,20 +51,7 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.11.13" }
       - run: pip install -q -r requirements.txt
-      - name: 空 SQLite 按序跑全部迁移两遍（expand-only 幂等）
-        run: |
-          export WTE_DB_PATH=$(mktemp -u /tmp/mig-XXXX).db WTE_ENV=dev
-          python -c "
-          from app.core import db
-          db.init_schema(); db.init_schema()   # 两遍
-          print('migrations idempotent: OK')"
-          python - <<'PY'
-          import sqlite3, os
-          c = sqlite3.connect(os.environ['WTE_DB_PATH'])
-          n = len(c.execute(\"SELECT name FROM sqlite_master WHERE type='table'\").fetchall())
-          assert n >= 15, f'tables={n}'
-          print(f'tables={n} OK')
-          PY
+      - run: WTE_ENV=dev python scripts/ci_migrations.py
 
   compose-config:
     runs-on: ubuntu-latest
