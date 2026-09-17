@@ -1,0 +1,61 @@
+name: deploy
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "干跑（解包＋打印重建判定，不碰容器）"
+        default: false
+        type: boolean
+      skip_public_checks:
+        description: "备案期降级：跳过公网断言（回环双面仍验）"
+        default: false
+        type: boolean
+concurrency:
+  group: deploy
+  cancel-in-progress: false          # 半途部署＝混合版本容器，禁取消
+permissions:
+  contents: read
+jobs:
+  ci-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: 等同一 commit 的 CI 跑绿（超时预算 15 分钟）
+        run: |
+          for i in $(seq 1 30); do
+            COND=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci --branch main \
+              --commit "$GITHUB_SHA" --json conclusion --jq '.[0].conclusion // empty' || true)
+            [ "$COND" = "success" ] && echo "CI green" && exit 0
+            [ "$COND" = "failure" ] && echo "CI red——禁止部署" && exit 1
+            sleep 30
+          done
+          echo "ci-gate 超时"; exit 1
+        env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+
+  deploy:
+    needs: ci-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: 打包（排除 .git/.venv/tests；清 ._*
+        run: |
+          find . -name '._*' -delete
+          COPYFILE_DISABLE=1 tar czf /tmp/deploy.tgz \
+            --exclude='.git' --exclude='.venv' --exclude='__pycache__' --exclude='tests' \
+            --exclude='.github' --exclude='docs' \
+            app migrations scripts requirements.txt docker-compose.yml Dockerfile
+      - name: 上传＋VPS 侧部署脚本（零字面量：全 Secrets/Vars）
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+          WTE_DOMAIN: ${{ vars.WTE_DOMAIN }}
+          CRON_WINDOWS: ${{ vars.CRON_WINDOWS }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          SKIP_PUB: ${{ inputs.skip_public_checks }}
+          SHA: ${{ github.sha }}
+        run: bash scripts/ci_deploy_remote.sh

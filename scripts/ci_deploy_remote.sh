@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# CD v1 远端部署脚本（ci-cd-plan §4）——runner 侧调用，全部值经 Secrets/Vars 注入。
+# 红线：只碰 api/admin 具名服务；永不裸 up / --remove-orphans / 平台层 / prune -a / --volumes。
+set -euo pipefail
+
+SSH="ssh -i $VPS_SSH_KEY -p $VPS_PORT -o StrictHostKeyChecking=accept-new $VPS_USER@$VPS_HOST"
+SCP="scp -i $VPS_SSH_KEY -P $VPS_PORT -o StrictHostKeyChecking=accept-new"
+
+echo "[deploy] 1/8 preflight（内存/磁盘守卫＋cron 窗口告警）"
+$SSH 'FREE_MB=$(free -m | awk "/^-\/+ Mem/{print \$7}"); DISK_PCT=$(df / | awk "NR==2{gsub(\"%\",\"\$5);print \$5}")
+if [ "$DISK_PCT" -gt 90 ]; then docker builder prune --filter until=24h -f >/dev/null 2>&1 || true; DISK_PCT=$(df / | awk "NR==2{gsub(\"%\",\"\$5);print \$5}"); fi
+[ "$DISK_PCT" -gt 90 ] && echo "磁盘 ${DISK_PCT}% 超守卫，中止" && exit 1
+[ "$FREE_MB" -lt 300 ] && echo "可用内存 ${FREE_MB}MB 不足，中止" && exit 1
+echo "守卫过：磁盘 ${DISK_PCT}% / 可用内存 ${FREE_MB}MB"'
+
+NOW_UTC=$(date -u +%H:%M)
+for WIN in $CRON_WINDOWS; do
+  W_S=$(echo "$WIN" | cut -d- -f1); W_E=$(echo "$WIN" | cut -d- -f2)
+  if [[ "$NOW_UTC" > "$W_S" && "$NOW_UTC" < "$W_E" ]]; then
+    echo "::warning::命中 cron 窗口 $WIN（仅提醒不阻断）"
+  fi
+done
+
+echo "[deploy] 2/8 留旧包（回滚兜底）"
+$SSH 'cp ~/deploy.tgz ~/rollback.tgz 2>/dev/null || echo "（首次部署无旧包）"'
+
+echo "[deploy] 3/8 上传新包＋解包"
+$SCP /tmp/deploy.tgz "$VPS_USER@$VPS_HOST:~/deploy.tgz"
+$SSH "sudo -n tar xzf ~/deploy.tgz -C $DEPLOY_PATH --overwrite && sudo -n find $DEPLOY_PATH -name '._*' -delete && echo 解包OK"
+
+echo "[deploy] 4/8 重建面判定（marker＋内容哈希）"
+DECIDE=$($SSH "cd $DEPLOY_PATH
+MARKER=\$(cat deploy.marker 2>/dev/null || echo none)
+NEW_API=\$(tar xzf ~/deploy.tgz -O app/main.py 2>/dev/null | md5sum | cut -d' ' -f1)
+NEW_ADM=\$(tar xzf ~/deploy.tgz -O app/admin.py 2>/dev/null | md5sum | cut -d' ' -f1)
+OLD_API=\(md5sum app/main.py 2>/dev/null | cut -d' ' -f1)
+OLD_ADM=\(md5sum app/admin.py 2>/dev/null | cut -d' ' -f1)
+# 解包后文件已是新版——与包内比必然相同，改与「运行中容器镜像内」比较不可得；
+# 简化口径：marker 不同即重建双面（保守，绝不漏建——治「只建 api 致 admin 404」）
+if [ \"\$MARKER\" = \"$SHA\" ]; then echo \"0 0 same\"; else echo \"1 1 diff(marker=\$MARKER)\"; fi")
+R_API=$(echo "$DECIDE" | awk '{print $1}'); R_ADMIN=$(echo "$DECIDE" | awk '{print $2}')
+echo "  判定：api=$R_API admin=$R_ADMIN（$($SSH cat $DEPLOY_PATH/deploy.marker 2>/dev/null || echo no-marker) -> $SHA）"
+
+if [ "$DRY_RUN" = "true" ]; then
+  echo "[deploy] DRY_RUN 到此为止（会重建 api=$R_API admin=$R_ADMIN）——不碰容器"
+  exit 0
+fi
+
+echo "[deploy] 5/8 构建切换（build 与 up 都带 GIT_SHA；marker 变化即双面重建——保守不漏建）"
+if [ "$R_API" = "1" ]; then
+  $SSH "cd $DEPLOY_PATH && sudo -n env GIT_SHA=$SHA docker compose build api admin && sudo -n env GIT_SHA=$SHA docker compose up -d api admin"
+  sleep 14
+else
+  echo "  同 SHA 已部署——跳过重建"
+fi
+
+echo "[deploy] 6/8 health 分层断言（6 次×10s）"
+$SSH "API_OK=0
+for i in 1 2 3 4 5 6; do
+  V=\$(curl -s http://127.0.0.1:8000/api/health | grep -o '\"version\":\"[^\"]*\"' || true)
+  echo \"  api try\$i: \$V\"
+  echo \"\$V\" | grep -q '$SHA' && API_OK=1 && break
+  sleep 10
+done
+[ \"\$API_OK\" = 1 ] || { echo 'FAIL: api 回环 health 未含新 SHA'; exit 1; }
+curl -s http://127.0.0.1:8001/api/health >/dev/null && echo '  admin 回环 OK' || { echo 'FAIL: admin health'; exit 1; }"
+
+if [ "$SKIP_PUB" != "true" ]; then
+  echo "  公网层：$WTE_DOMAIN"
+  CODE=000
+  for i in 1 2 3 4 5 6; do
+    CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "https://$WTE_DOMAIN/api/health" || echo 000)
+    [ "$CODE" = "200" ] && break; sleep 10
+  done
+  [ "$CODE" = "200" ] || { echo "FAIL: 公网 health $CODE"; exit 1; }
+  AC=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "https://$WTE_DOMAIN/api/admin/x" || echo 000)
+  { [ "$AC" = "403" ] || [ "$AC" = "404" ]; } || { echo "FAIL: 公网 admin 未拦（$AC）"; exit 1; }
+  echo "  公网层 OK（health 200＋admin $AC）"
+else
+  echo "  ::warning::备案降级期——公网断言跳过（降级版本区间记私有注记）"
+fi
+
+echo "[deploy] 7/8 写 marker（断言全过后才写）"
+$SSH "echo $SHA | sudo -n tee $DEPLOY_PATH/deploy.marker >/dev/null && echo marker=$SHA"
+
+echo "[deploy] 8/8 收尾（仅 dangling prune；绝不 -a / --volumes）"
+$SSH "sudo -n docker image prune -f >/dev/null 2>&1 || true; df -h / | tail -1"
+echo "== deploy 成功 =="
