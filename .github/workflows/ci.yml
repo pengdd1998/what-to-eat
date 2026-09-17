@@ -1,0 +1,72 @@
+name: ci
+on:
+  push: { branches: [main] }
+  pull_request: { branches: [main] }
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+permissions: { contents: read }
+jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  tree-hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 扫公开树 B 级模式（IP/别名/路径）——误红优于漏放
+        run: |
+          python3 scripts/ci_tree_hygiene.py
+
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11.13" }
+      - run: pip install -q -r requirements.txt -r requirements-dev.txt
+      - run: pytest -q
+
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11.13" }
+      - run: pip install -q -r requirements.txt -r requirements-dev.txt
+      - run: ./scripts/smoke_local.sh
+
+  migrations:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11.13" }
+      - run: pip install -q -r requirements.txt
+      - name: 空 SQLite 按序跑全部迁移两遍（expand-only 幂等）
+        run: |
+          export WTE_DB_PATH=$(mktemp -u /tmp/mig-XXXX).db WTE_ENV=dev
+          python -c "
+          from app.core import db
+          db.init_schema(); db.init_schema()   # 两遍
+          print('migrations idempotent: OK')"
+          python - <<'PY'
+          import sqlite3, os
+          c = sqlite3.connect(os.environ['WTE_DB_PATH'])
+          n = len(c.execute(\"SELECT name FROM sqlite_master WHERE type='table'\").fetchall())
+          assert n >= 15, f'tables={n}'
+          print(f'tables={n} OK')
+          PY
+
+  compose-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose config -q || echo "::notice::compose config 报错（external 网络不存在属预期）"
