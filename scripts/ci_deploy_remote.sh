@@ -10,11 +10,19 @@ SSH="ssh -i $KEY_FILE -p $VPS_PORT -o StrictHostKeyChecking=accept-new $VPS_USER
 SCP="scp -i $KEY_FILE -P $VPS_PORT -o StrictHostKeyChecking=accept-new"
 
 echo "[deploy] 1/8 preflight（内存/磁盘守卫＋cron 窗口告警）"
-$SSH 'FREE_MB=$(free -m | awk "/^-\/+ Mem/{print \$7}"); DISK_PCT=$(df / | awk "NR==2{gsub(\"%\",\"\$5);print \$5}")
-if [ "$DISK_PCT" -gt 90 ]; then docker builder prune --filter until=24h -f >/dev/null 2>&1 || true; DISK_PCT=$(df / | awk "NR==2{gsub(\"%\",\"\$5);print \$5}"); fi
+PREFLIGHT_B64=$(base64 <<'REMOTE'
+FREE_MB=$(free -m | awk '/^-\/+/ Mem/{print $7}')
+DISK_PCT=$(df / | awk 'NR==2{gsub("%","",$5);print $5}')
+if [ "$DISK_PCT" -gt 90 ]; then
+  docker builder prune --filter until=24h -f >/dev/null 2>&1 || true
+  DISK_PCT=$(df / | awk 'NR==2{gsub("%","",$5);print $5}')
+fi
 [ "$DISK_PCT" -gt 90 ] && echo "磁盘 ${DISK_PCT}% 超守卫，中止" && exit 1
 [ "$FREE_MB" -lt 300 ] && echo "可用内存 ${FREE_MB}MB 不足，中止" && exit 1
-echo "守卫过：磁盘 ${DISK_PCT}% / 可用内存 ${FREE_MB}MB"'
+echo "守卫过：磁盘 ${DISK_PCT}% / 可用内存 ${FREE_MB}MB"
+REMOTE
+)
+$SSH "echo $PREFLIGHT_B64 | base64 -d | bash"
 
 NOW_UTC=$(date -u +%H:%M)
 for WIN in $CRON_WINDOWS; do
