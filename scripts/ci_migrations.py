@@ -6,10 +6,13 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("WTE_ENV", "dev")
+db_path = "/tmp/ci-mig.db"
+for suf in ("", "-wal", "-shm"):
+    try: os.remove(db_path + suf)
+    except FileNotFoundError: pass
+os.environ["WTE_DB_PATH"] = db_path   # 必须在 import db 前（模块级固化路径）
 from app.core import db
 
-db_path = os.environ.get("WTE_DB_PATH") or "/tmp/ci-mig.db"
-os.environ["WTE_DB_PATH"] = db_path
 db.init_schema()
 db.init_schema()  # 两遍：幂等性
 conn = sqlite3.connect(db_path)
