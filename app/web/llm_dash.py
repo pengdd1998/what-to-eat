@@ -106,7 +106,14 @@ def _today_card(today: str) -> dict:
     m = conn.execute(
         "SELECT value FROM daily_metrics WHERE metric='quiz_question_llm_rate' "
         "AND metric_date=?", (today,)).fetchone()
-    return {"calls": r["c"], "cost": round(r["cost"], 4), "p95": p95,
+    err = conn.execute(
+        "SELECT COUNT(*) c FROM audit_log WHERE action='app_error' "
+        "AND substr(ts,1,10)=?", (today,)).fetchone()["c"]
+    r429 = conn.execute(
+        "SELECT value FROM daily_metrics WHERE metric_date=? AND "
+        "metric='app_429_count'", (today,)).fetchone()
+    return {"app_500": err, "app_429": int(float(r429["value"])) if r429 else 0,
+            "calls": r["c"], "cost": round(r["cost"], 4), "p95": p95,
             "success_rate": round(ok / r["c"], 4) if r["c"] else None,
             "month_cost": round(month, 4),
             "budget_pct": round(month / 40 * 100, 1),

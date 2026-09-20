@@ -116,6 +116,22 @@ def cost_close() -> dict:
     if fin_local_rate is not None and fin_total >= 10 and fin_local_rate > 0.3:
         notify("收口本地兜底率偏高", f"{date} local_rate={fin_local_rate} 拒因={fin_reasons}", "P2")
 
+    # P2-2：应用错误聚合（audit app_error 计数→日结；429 已实时 UPSERT）
+    app_500 = conn.execute(
+        "SELECT COUNT(*) c FROM audit_log WHERE action='app_error' "
+        "AND substr(ts,1,10)=?", (date,)).fetchone()["c"]
+    r429 = conn.execute(
+        "SELECT value FROM daily_metrics WHERE metric_date=? AND "
+        "metric='app_429_count'", (date,)).fetchone()
+    app_429 = int(float(r429["value"])) if r429 else 0
+    with db.tx() as t:
+        _write_metric(t, date, "app_500_count", app_500, None)
+        _write_metric(t, date, "app_429_count", app_429, None)
+    if app_500 > 10:
+        notify("P2: 应用 500 偏多", f"{date} n={app_500}", "P2")
+    if app_429 > 500:
+        notify("P2: 429 限流计数异常（被刷信号）", f"{date} n={app_429}", "P2")
+
     if disk_pct > 80:                            # OB-12 阈值（预期：当前 82~90 持续触发）
         notify("P2: 磁盘水位 %.1f%%（>80%%）" % disk_pct,
                "db=%.1fMB；磁盘 90%% 升级待办在案" % db_size_mb, "P2")
@@ -138,4 +154,5 @@ def cost_close() -> dict:
             "umami_lag": ev_total - cursor,
             "llm_success_rate": success_rate, "quiz_question_llm_rate": q_llm_rate,
             "quiz_finalize_local_rate": fin_local_rate,
-            "disk_pct": disk_pct, "db_size_mb": db_size_mb}
+            "disk_pct": disk_pct, "db_size_mb": db_size_mb,
+            "app_500_count": app_500, "app_429_count": app_429}

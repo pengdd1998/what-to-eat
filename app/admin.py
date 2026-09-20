@@ -314,6 +314,7 @@ def llm_dashboard(request: Request, days: int = 14, f_status: str = None,
     audit("llm_dashboard_view", "llm", {"days": days})
     return templates.TemplateResponse(request, "llm.html", {
         "days": days, "card": {**data["card"], "date": data["today"]},
+        "ping_health": _last_ping_health(),
         "detail": data["detail"], "audit": data["audit"],
         "f_status": f_status or "", "f_ec": f_ec or "", "f_task": f_task or "",
         "f_days": f_days,
@@ -373,3 +374,50 @@ def llm_session_trace(request: Request, sid: int):
         raise HTTPException(status_code=404, detail="session not found")
     audit("llm_trace_view", "llm", {"sid": sid})
     return templates.TemplateResponse(request, "trace.html", {"s": d})
+
+
+@admin_app.post("/api/admin/llm/ping")
+def llm_ping(request: Request):
+    require_token(request)
+    from .llm.service import ping as _ping
+    import time as _t
+    last = db.connect().execute(
+        "SELECT ts FROM audit_log WHERE action='llm_ping' ORDER BY id DESC "
+        "LIMIT 1").fetchone()
+    if last:                                   # 60s 节流（防连点）
+        from datetime import datetime as _dt
+        try:
+            prev = _dt.fromisoformat(last["ts"]).timestamp()
+        except ValueError:
+            prev = 0
+        if _t.time() - prev < 60:
+            return {"throttled": True}
+    return _ping()
+
+
+@admin_app.post("/admin/llm/ping")
+def llm_ping_ssr(request: Request):
+    require_basic(request)
+    from .llm.service import ping as _ping
+    import time as _t
+    last = db.connect().execute(
+        "SELECT ts FROM audit_log WHERE action='llm_ping' ORDER BY id DESC "
+        "LIMIT 1").fetchone()
+    if not last or True:                        # SSR 版直接测（节流在 JSON 版）
+        _ping()
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse("/admin/llm", status_code=303)
+
+
+def _last_ping_health():
+    """看板路由健康徽章数据（最近一条 llm_ping audit）。"""
+    import json as _json
+    row = db.connect().execute(
+        "SELECT detail, ts FROM audit_log WHERE action='llm_ping' "
+        "ORDER BY id DESC LIMIT 1").fetchone()
+    if not row:
+        return None
+    try:
+        return {"ts": row["ts"][:19], "routes": _json.loads(row["detail"])}
+    except Exception:
+        return None

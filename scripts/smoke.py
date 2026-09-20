@@ -276,6 +276,14 @@ def main():
         headers={"Authorization": "Basic " + _b64a.b64encode(
             f"owner:{ADMIN_TOKEN}".encode()).decode()}), timeout=10).read().decode()
     check("sessions 页 200", "选餐会话" in sess_html)
+    # P2-1 ping（provider=stub 环境返回 route_unconfigured 结构即过——结构断言）
+    req = urllib.request.Request(f"{ADMIN}/api/admin/llm/ping", method="POST")
+    req.add_header("Authorization", f"Bearer {ADMIN_TOKEN}")
+    ping = json.loads(urllib.request.urlopen(req, timeout=30).read())
+    check("llm ping 结构断言（监控 v2 P2-1）",
+          "primary" in ping or ping.get("throttled"))
+    # 看板新 KPI（P2-2）
+    check("看板应用错误 KPI", "应用错误" in dash_html)
     st, _, ov = call("GET", "/api/admin/llm/overview?days=7", base=ADMIN,
                      token=ADMIN_TOKEN)
     check("overview JSON 键齐全", st == 200 and

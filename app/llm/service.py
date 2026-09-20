@@ -12,6 +12,7 @@
 """
 import json
 import os
+import time
 from datetime import datetime, timezone
 
 from ..core import db   # 相对导入统一（评审观察项2）
@@ -195,3 +196,35 @@ def generate_recommendation(conn, ctx: dict):
 
 
 _log_call = log_call   # 兼容别名（2026-09-16 公共化）
+
+
+def ping() -> dict:
+    """LLM 三路由连通性检测（monitoring-workbench-plan §5.1，拍板 #3）。
+
+    只落 audit（action=llm_ping）不落 llm_calls——绕开 scene CHECK＋天然
+    不计熔断/月成本。走网关既有超时/重试/JSONL 留痕。
+    """
+    import os as _os
+    from ..core import audit as _audit_mod
+    from ..llm import gateway as _gw
+    routes = {
+        "primary": (None, _os.environ.get("LLM_MODEL", "")),
+        "glm": ("GLM_BASE_URL", _os.environ.get("GLM_MODEL", "")),
+        "qwen": ("QWEN_BASE_URL", _os.environ.get("QWEN_MODEL", "")),
+    }
+    out = {}
+    for route, (_, model) in routes.items():
+        if not model:
+            out[route] = {"ok": False, "error_class": "route_unconfigured",
+                          "latency_ms": 0}
+            continue
+        t0 = time.monotonic()
+        res = _gw.call("app.admin", "ping", "回复 ok", model=model, route=route,
+                       params={"temperature": 0.0, "max_tokens": 8})
+        out[route] = {"ok": bool(res["ok"]),
+                      "latency_ms": res.get("latency_ms") or int((time.monotonic() - t0) * 1000),
+                      "error_class": res.get("error_class")}
+    with db.tx() as c:
+        from ..core.audit import audit as _a
+        _a(c, "system:admin", "llm_ping", "routes", out)
+    return out

@@ -55,10 +55,26 @@ async def validation_exc_handler(request: Request, exc: RequestValidationError):
 
 @app.exception_handler(Exception)
 async def unhandled_exc_handler(request: Request, exc: Exception):
-    # W-4：兜底 500 统一契约（不漏栈给前端）；audit 留痕
+    # W-4：兜底 500 统一契约（不漏栈给前端）；audit 留痕（P2-2：观测出口，
+    # 单日 50 条上限防异常风暴；detail 只 exc 类型名＋path，脱敏从紧）
     import sys
     print(f"[WTE-ERROR] unhandled {request.url.path} {type(exc).__name__}: {exc}",
           file=sys.stderr)
+    try:
+        from .core.util import now_iso
+        _today_s = now_iso()[:10]
+        _n = db.connect().execute(
+            "SELECT COUNT(*) c FROM audit_log WHERE action='app_error' "
+            "AND substr(ts,1,10)=?", (_today_s,)).fetchone()["c"]
+        if _n < 50:
+            with db.tx() as _t:
+                _t.execute(
+                    "INSERT INTO audit_log(ts,actor,action,target,detail,"
+                    "created_at) VALUES(?,?,?,?,?,?)",
+                    (now_iso(), "system:api", "app_error", request.url.path,
+                     type(exc).__name__, now_iso()))
+    except Exception:
+        pass                                     # 观测留痕不得影响错误契约
     return JSONResponse(status_code=500,
                         content={"error": {"code": "internal",
                                            "message": "服务开小差了，稍后再试"}})
@@ -71,5 +87,21 @@ async def rate_limit_mw(request: Request, call_next):
     path = request.url.path
     if path.startswith("/api/") and path != "/api/health":
         if not ratelimit.allow(f"ip:{ip}", 60, 60.0):       # 60 req/min/IP [假设]
+            try:                                            # P2-2：429 计数出口
+                from .core.util import now_iso as _ni
+                _d = _ni()[:10]
+                with db.tx() as _t:
+                    _prev = _t.execute(
+                        "SELECT value FROM daily_metrics WHERE metric_date=? "
+                        "AND metric='app_429_count'", (_d,)).fetchone()
+                    _v = (float(_prev["value"]) + 1) if _prev else 1
+                    _t.execute(
+                        "INSERT INTO daily_metrics(metric_date,metric,value,n) "
+                        "VALUES(?, 'app_429_count', ?, 0) "
+                        "ON CONFLICT(metric_date, metric) DO UPDATE SET "
+                        "value=excluded.value",
+                        (_d, int(_v)))
+            except Exception:
+                pass
             return _err(429, "rate_limited", "请求太频繁，稍后再试")
     return await call_next(request)

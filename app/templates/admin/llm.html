@@ -25,6 +25,12 @@
   <div class="kpi"><div class="l">日费用</div><div class="v">${{ '%.2f'|format(card.cost) }}</div><div class="n">月 ${{ '%.2f'|format(card.month_cost) }}（{{ card.budget_pct }}% 预算）</div></div>
   <div class="kpi"><div class="l">熔断触发</div><div class="v">{{ card.breaker }}</div><div class="n">audit 实时</div></div>
   <div class="kpi"><div class="l">出题 LLM 占比</div><div class="v">{% if card.question_llm_rate != None %}{{ '%.0f'|format(card.question_llm_rate*100) }}%{% else %}—{% endif %}</div><div class="n">L4 能力质量</div></div>
+  <div class="kpi"><div class="l">应用错误</div><div class="v">{{ card.app_500 or 0 }}/{{ card.app_429 or 0 }}</div><div class="n">500/429 当日</div></div>
+  <div class="kpi"><div class="l">路由健康</div>
+    <div class="v" style="font-size:13px">{% if ping_health %}{% for r, d in ping_health.routes.items() %}{{ r }}:{{ '✓' if d.ok else '✗' }}{% if not loop.last %} {% endif %}{% endfor %}{% else %}未测{% endif %}</div>
+    <div class="n">{% if ping_health %}{{ ping_health.ts }}{% endif %}</div>
+    <form method="post" action="/admin/llm/ping" style="margin:2px 0"><button type="submit" style="font-size:11px;padding:2px 8px">Ping</button></form>
+  </div>
 </div>
 
 <h2>性能与成本趋势</h2>
