@@ -1,6 +1,7 @@
 # 美食分类图谱 v1.0 —— 维度树构建蓝本
 
 > 2026-09-16 整理 · 供研发重构 `app/domain/dimensions.py` 的树定义使用
+> 2026-09-20 对账修订：附录 F 与 migrations/0006 冲突消解（F.1 已入库 7 道以 0006 为准/F.2 新候选 13 道补 slug）；本地池计数 22；根因＝图谱与迁移正本协作脱节
 > 定位：**领域知识底座**，不是代码方案——树怎么改、分几期上，归 owner 拍板（AGENTS.md「拍板权归人」）
 > 对接对象：CHAIN（分类链）/ ORTHOGONAL（正交维度）/ `_DISH_HINTS`（收口一致性）/ LOCAL_BANK（本地题库）/ 菜池 tags 词表
 
@@ -510,7 +511,7 @@ env_ctx 已注入场景与天气 hint，图谱提供加权方向（供 LLM 出�
 
 ## 10. 存量菜品覆盖自检（70 道无孤儿验证）
 
-菜库 50 道（`migrations/0002`）＋本地池 20 道（`LOCAL_DISHES`），按 category 映射挂载点：
+菜库 50 道（`migrations/0002`）＋本地池 22 道（`LOCAL_DISHES`，维度树补强后＋烫煮/粥/点心 3 道），按 category 映射挂载点：
 
 | 菜库 category | 道数 | 挂载点 |
 |---|---|---|
@@ -530,7 +531,7 @@ env_ctx 已注入场景与天气 hint，图谱提供加权方向（供 LLM 出�
 | 面食 | 1 | filled（锅贴） |
 | 煲仔饭 | 1 | rice-bowl（煲仔） |
 
-本地池 20 道：noodle-soup 4 / rice-bowl 7 / filled 2 / noodle-dry 2 / meat-braise 2 / meat-grill 2 / light-cold 2 / light-salad 1（味噌汤定食）——**全部可挂，零孤儿**。反向核对：新谱 15 个 L2 品类中 `pot-tang`、`pot-congee`、`light-dimsum` 暂无存量菜——**属有意扩容缺口**，菜库补种时优先（§11 阶段三，候选清单见附录 F）。
+本地池 22 道：noodle-soup 4 / rice-bowl 7 / filled 2 / noodle-dry 2 / meat-braise 2 / meat-grill 2 / light-cold 2 / light-salad 1（味噌汤定食）/ pot-tang 1（麻辣烫）/ pot-congee 1（皮蛋瘦肉粥）/ light-dimsum 1（小笼包配粥）——**全部可挂，零孤儿**。菜库侧 pot-tang/pot-congee/light-dimsum 已由 0006 补种 9 道（附录 F.1），增厚候选见附录 F.2。
 
 ### 10.1 图谱健康度指标（季度复检的量化口径）
 
@@ -556,7 +557,7 @@ env_ctx 已注入场景与天气 hint，图谱提供加权方向（供 LLM 出�
 5. 增 `protein`（P1）与 `temp`（P1）、`pace`（P2）；同步落 §4.4 兼容矩阵两道治理（`validate_question` 兼容预检＋单值维度隐式锁定；finalize ◐ 格降级序）；§9.4 模糊答案接管逻辑同批落地。`should_finalize` 必锁集维持 `spice`＋`texture`，防步数回涨。上线后观察步数分布与模糊答案占比（周判读已带维度树步数长尾观察项）。
 
 **阶段三（菜库与图谱共生长）**
-6. 按附录 F 清单补种菜库 20 道（`pot-tang`/`pot-congee`/`light-dimsum` 三个零存量 L2 清零；meat-fish/light-salad/meat-stir/江浙沪增厚）；入库后跑 §10.1 三指标自查（预期 L2 覆盖 15/15）。
+6. 按附录 F.2 新候选 13 道补种菜库（`pot-tang`/`pot-congee`/`light-dimsum` 三 L2 已由 0006 先行清零，剩余增厚 meat-fish/light-salad/meat-stir/江浙沪）；入库后跑 §10.1 三指标自查（预期 L2 覆盖 15/15）。
 7. golden set 扩充：按附录 A.2 矩阵铺 ≈24 条（G1/G4~G6 先行，G2/G3 随阶段二治理落地后补）。
 8. 需求向→属性向映射表（§5.2）落到 `strategy.py` 收敛归一处，打通菜库 strict 匹配。
 9. 推荐语模板库（§8.1~8.3）落 `app/domain/` 纯数据 JSON——本地兜底直接套模板（降级态文案对齐 LLM 态），LLM 态注入 prompt 段1 后静态段做风格锚（不动最长前缀）。
@@ -697,31 +698,40 @@ env_ctx 已注入场景与天气 hint，图谱提供加权方向（供 LLM 出�
 | 2026-09-16 | v1.2 治理补强 | ①`牛奶麦片粥` 归位 pot-congee（原挂 pot-soup）；②新增 §4.4 链×正交兼容性矩阵＋两道治理规则（出题前 ✕ 值过滤/单值隐式锁定、收口 ◐ 格降级序）；③新增 §9.4 模糊答案虚路径处理；④新增附录 D 边界仲裁表（23 案集中裁决）；⑤新增 A.2 golden 用例矩阵规划（见附录 A 末） |
 | 2026-09-18 | v1.3 闭环补强 | ①rice-bowl L3 收敛 4→3 支（rice-exotic 并入荤盖，异国味降为菜级 tag）；②§1 新增原则六「地域不引入」负面裁决（隐私口径：IP 城市仅天气用途）；③§5.2 补词表合规边界（功效暗示词判别法）；④新增 §9.5 换一同心圆探索序（三跳圈级/正交锁跨跳保留/分跳 accept 观测）；⑤新增 §10.1 图谱健康度指标（L2 覆盖/辣度分布/大系均衡/仲裁增长率/golden 通过率）；⑥新增附录 F 补种候选清单 20 道（需求向 tags，含图谱挂载与 ◐ 格亚型标注） |
 
-## 附录 F. 菜库补种候选清单（20 道，可直接入库）
+## 附录 F. 菜库补种清单·对账版（v1.3 修订 2026-09-20）
 
-> 覆盖 §10 三个零存量 L2（pot-tang/pot-congee/light-dimsum）与偏薄位（meat-fish/light-salad/meat-stir/江浙沪）。**tags 一律用菜库需求向 9 词表**（想喝汤/想吃热乎/想吃冷的/要快/重口味/清淡/不吃辣/预算30以下/想慢享——属性向词不进 `dish_library.tags`，映射见 §5.2）；「图谱挂载」列供 `LOCAL_DISHES` 与 `_DISH_HINTS` 同步用。base_score 参照存量分布给中高位（热门国民菜 0.75+）。每道均过附录 C 五步检查。
+> **对账说明**：本清单原稿（9/18）列 20 道「可直接入库」，其中 7 道已被 `migrations/0006_taxonomy_seed.sql`（9/16 提交上生产）先行补种——**已入库 7 道以 0006 现行为准**（slug/tags/base_score 见 F.1 表，原稿 tags 作废勿执行）；**新候选 13 道**才走后续 `migrations/NNNN_*.sql` 流程（F.2 表，已补齐 `dish_slug` 列）。tags 一律用菜库需求向 9 词表；「图谱挂载」供 `LOCAL_DISHES` 与 `_DISH_HINTS` 同步用。
 
-| 菜名 | category | tags（需求向） | base | 图谱挂载 | 备注 |
-|---|---|---|---|---|---|
-| 麻辣烫 | 简餐 | 重口味/想吃热乎/要快/预算30以下 | 0.8 | pot-tang·tang-malatang | 国民度最高，冷启动友好 |
-| 冒菜 | 川菜 | 重口味/想吃热乎/预算30以下 | 0.75 | pot-tang·tang-malatang | |
-| 钵钵鸡 | 川菜 | 重口味/想吃冷的 | 0.7 | pot-tang·tang-chuan | 冷吃变体，仲裁见附录 D |
-| 串串香 | 夜宵 | 重口味/想慢享 | 0.7 | pot-tang·tang-chuan | |
-| 皮蛋瘦肉粥 | 粤式 | 想吃热乎/清淡/要快 | 0.8 | pot-congee·congee-meat | 宵夜高频 |
-| 砂锅虾粥 | 粤式 | 想吃热乎/想慢享 | 0.75 | pot-congee·congee-meat | |
-| 艇仔粥 | 粤式 | 清淡/想吃热乎 | 0.7 | pot-congee·congee-meat | |
-| 南瓜小米粥 | 轻食 | 清淡 | 0.55 | pot-congee·congee-plain | 低分位，对冲重口味过采样 |
-| 虾饺 | 粤式 | 清淡/想慢享 | 0.7 | light-dimsum·dimsum-canopy | |
-| 肠粉 | 粤式 | 要快/清淡/预算30以下 | 0.75 | light-dimsum·dimsum-rice-noodle | 早餐/下午茶跨场景 |
-| 小笼包 | 面食 | 要快/想吃热乎 | 0.75 | light-dimsum·dimsum-canopy | 与「小笼包配粥」判界：纯笼归此 |
-| 烧麦 | 面食 | 要快 | 0.65 | light-dimsum·dimsum-canopy | |
-| 金汤酸菜鱼 | 川菜 | 重口味/想吃热乎 | 0.85 | meat-fish·fish-suancai | 与存量「酸菜鱼」二选一即可 |
-| 番茄鱼 | 家常 | 想吃热乎/不吃辣 | 0.8 | meat-fish·fish-tomato | meat-fish×不辣 的 ◐ 格正解（§4.4） |
-| 考伯沙拉 | 轻食 | 想吃冷的/清淡 | 0.65 | light-salad·salad-poke | |
-| 金枪鱼沙拉三明治 | 轻食 | 要快/想吃冷的 | 0.6 | light-salad·salad-sandwich | 仲裁：冷轻食组合语境归沙拉（附录 D） |
-| 农家小炒肉 | 湘菜 | 重口味/要快 | 0.75 | meat-stir·stir-rice | |
-| 糖醋里脊 | 家常 | 不吃辣/要快 | 0.7 | meat-stir·stir-soft | meat-stir×不辣 ◐ 格亚型 |
-| 糖醋排骨 | 江浙 | 想吃热乎/不吃辣 | 0.7 | meat-stir·stir-soft | 补江浙沪菜系存量 |
-| 红烧大排 | 江浙 | 想吃热乎 | 0.7 | meat-braise·stew-pork | 同上 |
+### F.1 已入库 7 道（0006 现行为准，勿重复种）
+
+| dish_slug（0006 现行） | 菜名 | category | tags（0006 现行） | base | 图谱挂载 | 与原稿差异 |
+|---|---|---|---|---|---|---|
+| malatang | 麻辣烫 | 简餐 | 想喝汤/重口味 | 0.72 | pot-tang·tang-malatang | tags/base 异 |
+| maocai | 冒菜 | 川菜 | 想喝汤/重口味 | 0.70 | pot-tang·tang-malatang | tags/base 异 |
+| pidanshourouzhou | 皮蛋瘦肉粥 | 粤式 | 想喝汤/清淡 | 0.74 | pot-congee·congee-meat | tags/base 异 |
+| shaguozhou | 砂锅虾粥 | 粤式 | 想喝汤/想慢享 | 0.70 | pot-congee·congee-meat | tags/base 异 |
+| xiaolongbao | 小笼包 | 面食 | 想慢享/不吃辣 | 0.76 | light-dimsum·dimsum-canopy | tags/base 异 |
+| xiajiao | 水晶虾饺 | 粤式 | 想慢享/清淡 | 0.72 | light-dimsum·dimsum-canopy | 菜名/tags 异 |
+| changfen | 鲜虾肠粉 | 粤式 | 要快/想吃冷的/清淡 | 0.72 | light-dimsum·dimsum-rice-noodle | 菜名/tags 异 |
+
+（另 0006 还种了关东煮 `guandongzhu`/白粥配小菜 `baizhoupeicai` 两道不在原稿内，一并生效。）
+
+### F.2 新候选 13 道（后续迁移流程入库；dish_slug 已定，入库前查重）
+
+| dish_slug | 菜名 | category | tags（需求向） | base | 图谱挂载 | 备注 |
+|---|---|---|---|---|---|---|
+| bo-bo-ji | 钵钵鸡 | 川菜 | 重口味/想吃冷的 | 0.7 | pot-tang·tang-chuan | 冷吃变体，仲裁见附录 D |
+| chuan-chuan-xiang | 串串香 | 夜宵 | 重口味/想慢享 | 0.7 | pot-tang·tang-chuan | |
+| ting-zaizhou | 艇仔粥 | 粤式 | 清淡/想吃热乎 | 0.7 | pot-congee·congee-meat | |
+| nangua-xiaomizhou | 南瓜小米粥 | 轻食 | 清淡 | 0.55 | pot-congee·congee-plain | 低分位，对冲重口味过采样 |
+| shaomai | 烧麦 | 面食 | 要快 | 0.65 | light-dimsum·dimsum-canopy | |
+| jintang-suancaiyu | 金汤酸菜鱼 | 川菜 | 重口味/想吃热乎 | 0.85 | meat-fish·fish-suancai | 与存量「酸菜鱼」二选一即可 |
+| fanqieyu | 番茄鱼 | 家常 | 想吃热乎/不吃辣 | 0.8 | meat-fish·fish-tomato | meat-fish×不辣 的 ◐ 格正解（§4.4） |
+| kaobo-shala | 考伯沙拉 | 轻食 | 想吃冷的/清淡 | 0.65 | light-salad·salad-poke | |
+| jinqianyu-sandwich | 金枪鱼沙拉三明治 | 轻食 | 要快/想吃冷的 | 0.6 | light-salad·salad-sandwich | 仲裁：冷轻食组合语境归沙拉（附录 D） |
+| nongjia-xiaochaorou | 农家小炒肉 | 湘菜 | 重口味/要快 | 0.75 | meat-stir·stir-rice | |
+| tangcu-liji | 糖醋里脊 | 家常 | 不吃辣/要快 | 0.7 | meat-stir·stir-soft | meat-stir×不辣 ◐ 格亚型 |
+| tangcu-paigu | 糖醋排骨 | 江浙 | 想吃热乎/不吃辣 | 0.7 | meat-stir·stir-soft | 补江浙沪菜系存量 |
+| hongshaodapai | 红烧大排 | 江浙 | 想吃热乎 | 0.7 | meat-braise·stew-pork | 同上 |
 
 > 入库后自查触发：§10.1 三个指标应同时达标（L2 覆盖升至 15/15；pot 系占比升至健康区间；不辣档占比回升）。补种走 `migrations/NNNN_*.sql` expand-only 流程（细则 `/db-migration`）。
