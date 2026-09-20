@@ -21,10 +21,16 @@ WHITELIST = {
     "scripts/cron.md",                  # cron 说明的容器内路径示例（非宿主拓扑）
 }
 
-# 只扫公开仓跟踪集（git ls-files）——工作区另有不入公开树的敏感子树
-# （docs/execution 等，被 gitignore 挡住），文件系统 rglob 会误扫它们
-tracked = subprocess.run(["git", "ls-files"], capture_output=True,
-                         text=True, check=True).stdout.splitlines()
+# 扫公开仓跟踪集（git ls-files）——工作区另有不入公开树的敏感子树
+# （docs/execution 等，被 gitignore 挡住），文件系统 rglob 会误扫它们。
+# --staged：扫暂存集（git diff --cached，含新 add 的未跟踪文件）——pre-commit 本地拦截层用
+if "--staged" in sys.argv:
+    tracked = subprocess.run(
+        ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
+        capture_output=True, text=True, check=True).stdout.splitlines()
+else:
+    tracked = subprocess.run(["git", "ls-files"], capture_output=True,
+                             text=True, check=True).stdout.splitlines()
 hits = []
 for rel in tracked:
     if rel in WHITELIST:
