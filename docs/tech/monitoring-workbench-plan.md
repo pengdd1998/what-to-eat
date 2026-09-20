@@ -1,7 +1,7 @@
 # 监控 v2：工作台化落地方案 v1.1
 
 > 2026-09-20 立项 · 源＝owner 指令「参考 Claude Code Router（CCR）的工作台监控，对监控模块给出优化方案」→「采用建议策略，给出详细落地方案文档」
-> 状态：**已拍板（2026-09-20 owner「采用建议策略」）**——§0 四拍板点按 agent 建议终裁；开发评估通过＋增量 A/B 采纳后**方案冻结，可实施**（复审 2026-09-20）
+> 状态：**三批全部实施完成并上生产**（2026-09-20：P0-1 hotfix＋批次一~三；生产验证：probe 探活复活全绿/看板工作台 12 SVG＋小时桶＋筛选＋KPI/0008 两列落库）——ping 生产实况：BASE_URL 已配、**LLM/GLM/QWEN 三 MODEL 名未配**（route_unconfigured 属缺省预期，待 owner 提供后即真实探测）
 > v1.1 变更（复审采纳）：①§0 补记评审增量发现 A（probe 兜底告警改翻转触发）＋B（跳转下线与 probe 关联披露）；②§3 P0-1 实现与测试按 A 更新（四锚）；③实施表/风险表同步
 > 前作：`docs/tech/llm-monitoring-plan.md` v1.1（P0-P2 已完成上线，2026-09-16 cd3f364）；本方案为其续篇，覆盖面从 LLM 扩到全监控（深链探活/磁盘/应用错误/判读流程）
 > 关联：ADR-004（LLM 主供）、`docs/reverse/constraint-candidates.md` OB-10~14、`.zcode/commands/db-migration.md`、`.zcode/commands/incident.md`、AGENTS.md 架构红线
