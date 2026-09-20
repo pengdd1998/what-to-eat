@@ -57,4 +57,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: docker compose config -q || echo "::notice::compose config 报错（external 网络不存在属预期）"
+      - run: docker compose config -q   # 静态校验：拦的正是 YAML/插值错误（F1——原 || 兜底恒绿）

@@ -10,7 +10,7 @@ SSH="ssh -i $KEY_FILE -p $VPS_PORT -o StrictHostKeyChecking=accept-new $VPS_USER
 SCP="scp -i $KEY_FILE -P $VPS_PORT -o StrictHostKeyChecking=accept-new"
 
 echo "[deploy] 1/8 preflight（内存/磁盘守卫＋cron 窗口告警）"
-PREFLIGHT_B64=$(base64 -w0 2>/dev/null <<'REMOTE' || true
+PREFLIGHT_B64=$(base64 -w0 <<'REMOTE'
 FREE_MB=$(free -m | awk '/^Mem:/{print $7}')
 DISK_PCT=$(df / | awk 'NR==2{gsub("%","",$5);print $5}')
 if [ "$DISK_PCT" -gt 90 ]; then
@@ -51,6 +51,8 @@ fi
 
 echo "[deploy] 5/8 构建切换（build-arg 带 GIT_SHA；marker 变化即双面重建——保守不漏建）"
 if [ "$R_API" = "1" ]; then
+  # F2：build 前给当前运行镜像打 :prev——保留一版镜像，回滚恢复秒级加速选项
+  $SSH "sudo -n docker tag what-to-eat/api:dev what-to-eat/api:prev 2>/dev/null; sudo -n docker tag what-to-eat/admin:dev what-to-eat/admin:prev 2>/dev/null; true"
   $SSH "cd $DEPLOY_PATH && sudo -n docker compose build --build-arg GIT_SHA=$SHA api admin && sudo -n docker compose up -d api admin"
   sleep 14
 else
