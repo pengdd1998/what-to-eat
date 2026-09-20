@@ -76,6 +76,15 @@ def cost_close() -> dict:
                 fin_reasons.get(fin.get("local_reason", "call_failed"), 0) + 1
     fin_local_rate = round(fin_local / fin_total, 4) if fin_total else None
 
+    # OB-12 磁盘/库体积判定（P0-3，monitoring-workbench-plan §3）：
+    # 与 /api/health 同算法同视角（容器内挂载卷）；阈值常量起步
+    import shutil as _shutil
+    _du = _shutil.disk_usage(os.path.dirname(os.path.abspath(db.DB_PATH)) or "/")
+    disk_pct = round(100 * (_du.total - _du.free) / _du.total, 1)
+    db_bytes = sum(
+        os.path.getsize(db.DB_PATH + suf) for suf in ("", "-wal", "-shm")
+        if os.path.exists(db.DB_PATH + suf))
+    db_size_mb = round(db_bytes / 1048576, 1)
     with db.tx() as t:
         _write_metric(t, date, "llm_calls", row["c"], row["c"])
         _write_metric(t, date, "llm_cost_usd", round(row["cost"], 4), row["c"])
@@ -93,6 +102,8 @@ def cost_close() -> dict:
         _write_metric(t, date, "quiz_question_llm_rate", q_llm_rate, q_steps)
         _write_metric(t, date, "quiz_finalize_local_rate", fin_local_rate,
                       fin_total)
+        _write_metric(t, date, "disk_pct", disk_pct, None)
+        _write_metric(t, date, "db_size_mb", db_size_mb, None)
     # ===== 告警四条（plan §5.1，拍板 B 建议值起步）=====
     if mrow["cost"] > 40:                        # SC-2 月线 $40 → P2（X6 实接）
         notify("LLM 月成本超 $40", f"月累计 ${mrow['cost']:.2f}", "P2")
@@ -104,6 +115,13 @@ def cost_close() -> dict:
         notify("出题 LLM 占比走低", f"{date} llm_rate={q_llm_rate}（n={q_steps}）", "P2")
     if fin_local_rate is not None and fin_total >= 10 and fin_local_rate > 0.3:
         notify("收口本地兜底率偏高", f"{date} local_rate={fin_local_rate} 拒因={fin_reasons}", "P2")
+
+    if disk_pct > 80:                            # OB-12 阈值（预期：当前 82~90 持续触发）
+        notify("P2: 磁盘水位 %.1f%%（>80%%）" % disk_pct,
+               "db=%.1fMB；磁盘 90%% 升级待办在案" % db_size_mb, "P2")
+    if db_size_mb > 500:
+        notify("P2: SQLite 库体积 %.1fMB（>500MB，OB-12）" % db_size_mb, "", "P2")
+
     # P95 连续 3 日 >3000ms（软超时观察项自动化收口）
     p95_hist = [r["value"] for r in conn.execute(
         "SELECT value FROM daily_metrics WHERE metric='llm_p95_ms' AND "
@@ -119,4 +137,5 @@ def cost_close() -> dict:
             "llm_p95_ms": p95, "llm_month_cost_usd": round(mrow["cost"], 4),
             "umami_lag": ev_total - cursor,
             "llm_success_rate": success_rate, "quiz_question_llm_rate": q_llm_rate,
-            "quiz_finalize_local_rate": fin_local_rate}
+            "quiz_finalize_local_rate": fin_local_rate,
+            "disk_pct": disk_pct, "db_size_mb": db_size_mb}

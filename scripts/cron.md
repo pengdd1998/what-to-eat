@@ -26,3 +26,5 @@ crontab 示例（VPS 部署后启用；当前 X5 阻塞＝占位）：
 ```
 
 | 03:45 | 宿主 crontab | JSONL 14 天清理（docker exec 容器内 `/srv/app/app/logs/`，文件操作非表写不触 cron 只 INSERT 红线） |
+
+| wrapper 正本 | 私有 | `docs/ops-private/bin/cron-run.sh`（宿主实装版入档；告警 env＝SERVERCHAN_SENDKEY/NTFY_TOPIC 任配其一） |

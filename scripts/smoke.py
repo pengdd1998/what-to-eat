@@ -212,6 +212,8 @@ def main():
     check("cost_close 含 llm_month_cost_usd", "llm_month_cost_usd" in cc)
     check("cost_close 含监控 9 项（plan §3.4）",
           "llm_success_rate" in cc and "quiz_question_llm_rate" in cc)
+    check("cost_close 含 disk_pct/db_size_mb（监控 v2 P0-3）",
+          "disk_pct" in cc and "db_size_mb" in cc)
     # 阶段3②教训入烟：crontab 走 `python -m app.cron`，包执行须有 __main__.py；
     # 遍历读任务（aggregate 在冒烟库已有数据→隐藏依赖漏 import 能被抓到）
     _cron_ok = True

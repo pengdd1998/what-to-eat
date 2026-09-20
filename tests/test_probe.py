@@ -96,3 +96,17 @@ def test_probe_persistent_dead_dedup():
                       "action='probe_auto_fallback'").fetchone()[0]
     assert after == before                        # 无新 audit 行
     assert db.get_config("links")["status"] == "dead"   # config 幂等保持
+
+
+def test_circuit_break_notify_dedup():
+    """P0-2 熔断通知当日去重：当日首次 notify 一次、第二次静默（audit 两次不丢）。"""
+    from unittest import mock as _m
+    from app.core import notify as notify_mod
+    from app.llm import service as svc
+    with _m.patch.object(notify_mod, "notify") as n:
+        svc._audit_circuit("daily_call_cap")
+        svc._audit_circuit("daily_call_cap")
+    assert n.call_count == 1            # 当日去重：仅首次
+    c = db.connect()
+    assert c.execute("SELECT COUNT(*) FROM audit_log WHERE "
+                     "action='llm_circuit_break'").fetchone()[0] == 2  # 审计不丢

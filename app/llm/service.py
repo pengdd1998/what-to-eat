@@ -93,10 +93,19 @@ def _fail(reason: str, latency_ms: int = 0, error_class=None) -> dict:
 
 
 def _audit_circuit(reason: str) -> None:
-    """熔断审计（阶段4抽函数：complete/generate_recommendation 原逐字双份）。"""
+    """熔断审计＋当日首次 P2 通知（P0-2：两段式——tx 内判首次写 audit、tx 外发 notify）。"""
     from ..core.audit import audit
+    from ..core.notify import notify
+    first_today = False
     with db.tx() as c:
+        n = c.execute(
+            "SELECT COUNT(*) FROM audit_log WHERE action='llm_circuit_break' "
+            "AND substr(ts,1,10)=?", (_today(),)).fetchone()[0]
+        first_today = (n == 0)
         audit(c, "system:api", "llm_circuit_break", reason, {"day": _today()})
+    if first_today:                # 当日去重：只首次触发通知（持锁外做网络 IO）
+        notify("P2: LLM 日熔断已触发（%s），今日实时调用关闭、本地兜底生效" % reason,
+               "", "P2")
 
 
 def complete(conn, prompt: str, *, scene: str = "adhoc", agent: str = "app",
