@@ -76,7 +76,7 @@ def batch() -> dict:
                  per_call if res["ok"] else 0.0,
                  "ok" if res["ok"] else "error",
                  task="batch_copy", error_class=res.get("error_class"),
-                 attempts=res.get("attempts"))
+                 attempts=res.get("attempts"), model=model)
         if not res["ok"]:
             return None
         txt = (res["content"] or "").strip().strip('"').strip()

@@ -301,15 +301,27 @@ def audit_log(limit: int = 50):
 # ---- LLM 监控看板（llm-monitoring-plan §4，P1） ----
 
 @admin_app.get("/admin/llm")
-def llm_dashboard(request: Request, days: int = 14):
+def llm_dashboard(request: Request, days: int = 14, f_status: str = None,
+                  f_ec: str = None, f_task: str = None, f_days: int = 7):
     require_basic(request)
     days = max(2, min(days, 90))
-    data = llm_dash.overview(days)
+    f_days = f_days if f_days in (1, 7, 30) else 7
+    data = llm_dash.overview(days, f_status=f_status, f_ec=f_ec,
+                             f_task=f_task, f_days=f_days)
     t = data["trend"]
+    hr = data["hourly"]
+    ecs = t.get("_error_classes", [])
     audit("llm_dashboard_view", "llm", {"days": days})
     return templates.TemplateResponse(request, "llm.html", {
         "days": days, "card": {**data["card"], "date": data["today"]},
         "detail": data["detail"], "audit": data["audit"],
+        "f_status": f_status or "", "f_ec": f_ec or "", "f_task": f_task or "",
+        "f_days": f_days,
+        "hours_axis": ",".join(hr["hours"]),
+        "svg_h_calls": llm_dash.svg_bars(hr["calls"], color="#8aa8d8",
+                                         fmt="{:.0f}"),
+        "svg_h_cost": llm_dash.svg_bars(hr["cost"], color="#7bc8a4",
+                                        fmt="${:.2f}"),
         "svg_p95": llm_dash.svg_line(t["llm_p95_ms"], color="#e8b93e",
                                      ref_line=3000, ref_label="软超时 3000ms"),
         "svg_cost": llm_dash.svg_bars(t["llm_cost_usd"], color="#7bc8a4",
@@ -326,6 +338,16 @@ def llm_dashboard(request: Request, days: int = 14):
         "svg_ql": llm_dash.svg_line(
             [None if v is None else v * 100 for v in t["quiz_question_llm_rate"]],
             color="#8aa8d8", ref_line=70, ref_label="目标 70%", fmt="{:.0f}%"),
+        "svg_retry": llm_dash.svg_line(
+            [None if v is None else v * 100 for v in t["llm_retry_rate"]],
+            color="#e88d5a", fmt="{:.0f}%"),
+        "svg_soft": llm_dash.svg_line(
+            [None if v is None else v * 100 for v in t["llm_soft_timeout_rate"]],
+            color="#d87d7d", ref_line=30, ref_label="30%", fmt="{:.0f}%"),
+        "svg_tokens": llm_dash.svg_bars(t["llm_tokens_out_sum"],
+                                        color="#c98ad8", fmt="{:.0f}"),
+        "svg_ec": llm_dash.svg_stack(
+            [t.get(f"ec:{e}", []) for e in ecs], ecs) if ecs else None,
     })
 
 
@@ -333,3 +355,21 @@ def llm_dashboard(request: Request, days: int = 14):
 def llm_overview(request: Request, days: int = 14):
     require_token(request)
     return llm_dash.overview(max(2, min(days, 90)))
+
+
+@admin_app.get("/admin/llm/sessions")
+def llm_sessions(request: Request):
+    require_basic(request)
+    audit("llm_sessions_view", "llm", {})
+    return templates.TemplateResponse(request, "sessions.html", {
+        "sessions": llm_dash.recent_sessions()})
+
+
+@admin_app.get("/admin/llm/session/{sid}")
+def llm_session_trace(request: Request, sid: int):
+    require_basic(request)
+    d = llm_dash.session_trace(sid)
+    if not d:
+        raise HTTPException(status_code=404, detail="session not found")
+    audit("llm_trace_view", "llm", {"sid": sid})
+    return templates.TemplateResponse(request, "trace.html", {"s": d})

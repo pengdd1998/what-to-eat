@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}会话 · 吃什么 Admin{% endblock %}
+{% block h1 %}选餐会话（近 20）{% endblock %}
+{% block main %}
+<div class="chartbox">
+<table>
+  <tr><th>#</th><th>anon</th><th>场景</th><th>步数</th><th>状态</th><th>结果</th><th>source</th><th>兜底原因</th><th>时间</th><th></th></tr>
+  {% for s in sessions %}
+  <tr>
+    <td>{{ s.id }}</td><td>{{ s.anon_short }}</td><td>{{ s.meal_scenario or '—' }}</td>
+    <td>{{ s.step_index }}</td><td>{{ s.state }}</td><td>{{ s.dish }}</td>
+    <td class="{{ 'err' if s.source == 'local' else 'ok' }}">{{ s.source or '' }}</td>
+    <td>{{ s.local_reason }}</td><td>{{ s.created_at[5:16] }}</td>
+    <td><a href="/admin/llm/session/{{ s.id }}">trace</a></td>
+  </tr>
+  {% else %}<tr><td colspan="10" style="color:#667">暂无会话</td></tr>{% endfor %}
+</table>
+</div>
+{% endblock %}

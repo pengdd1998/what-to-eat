@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Admin · 吃什么{% endblock %}</title>
+<style>
+  :root{--bg:#101a15;--card:#182620;--line:#2c3f36;--ink:#e8e4d8;--dim:#9aa89e;--y:#e8b93e}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:14px/1.6 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:16px}
+  h1{font-size:18px;margin:0 0 4px}h2{font-size:15px;margin:18px 0 8px;color:var(--y)}
+  .sub{color:var(--dim);font-size:12px;margin-bottom:14px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+  .kpi .v{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+  .kpi .l{color:var(--dim);font-size:12px}
+  .kpi .n{color:var(--dim);font-size:11px}
+  .chartbox{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px;margin:8px 0}
+  .chartbox h3{margin:0 0 6px;font-size:13px;color:var(--dim)}
+  table{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
+  th,td{padding:4px 8px;border-bottom:1px solid var(--line);text-align:left}
+  th{color:var(--dim);font-weight:400}
+  .ok{color:#7bc8a4}.err{color:#d87d7d}.warn{color:var(--y)}
+  nav a{color:var(--dim);margin-right:12px;text-decoration:none}
+  nav a.on{color:var(--y);border-bottom:2px solid var(--y)}
+  svg.chart{width:100%;height:auto}
+  svg.empty text{fill:#667}
+</style>
+</head>
+<body>
+<h1>{% block h1 %}{% endblock %}</h1>
+<nav><a href="/admin/llm">看板</a> <a href="/admin/llm/sessions">会话</a></nav>
+{% block main %}{% endblock %}
+<p class="sub">Admin 面仅回环/隧道可达 · prompt 永不入库</p>
+</body>
+</html>

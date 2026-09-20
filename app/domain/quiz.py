@@ -361,6 +361,18 @@ def _local_question(step_index: int, state=None) -> dict:
             "step": step_index, "source": "local"}
 
 
+def _stash_pending(sid, q) -> None:
+    """next() 生成题暂存（0008 pending_q）——answer() 取 source 入 question_log 后清空。
+    L4 口径修复（monitoring-workbench-plan P1-4b）：question_log 由 answer 落库但
+    source 在 next 生成，靠本列传递；异常吞（口径修复不得影响出题主链）。"""
+    try:
+        with db.tx() as t:
+            t.execute("UPDATE quiz_session SET pending_q=? WHERE id=?",
+                      (json.dumps({"source": q.get("source", "llm")}), sid))
+    except Exception:
+        pass
+
+
 def next_question(session, client_ip: str = "") -> dict:
     """导航式出题（2026-09-15 维度树方案）：LLM 从引擎计算的可用维度集中选维度出题。
 
@@ -369,6 +381,7 @@ def next_question(session, client_ip: str = "") -> dict:
     任一验收不过→本地题库按步兜底（零额外 LLM 调用，降级链不变）。
     """
     anon_id = session["anon_id"]
+    sid_key = session["id"]
     log = json.loads(session["question_log"] or "[]")
     step = session["step_index"]
     state = dimensions.build_state(log)
@@ -463,15 +476,18 @@ def next_question(session, client_ip: str = "") -> dict:
                                         o["tags"] = [v]
                                         break
                     opts = [{**o, "dim": norm["dimension"]} for o in norm["options"]]
-                    return {"question": norm["question"],
-                            "options": opts, "step": step,
-                            "should_stop": (bool(data.get("should_stop"))
-                                            and step >= min_required),
-                            "source": "llm"}
+                    _q = {"question": norm["question"],
+                          "options": opts, "step": step,
+                          "should_stop": (bool(data.get("should_stop"))
+                                          and step >= min_required),
+                          "source": "llm"}
+                    _stash_pending(sid_key, _q)      # L4 口径修复（0008 pending_q）
+                    return _q
     # 降级：本地题库（按约束状态选题，2026-09-16 修复本地题自身偏移源）
     q = _local_question(step, state)
     q["should_stop"] = (step >= min_required - 1)
     q["done"] = False
+    _stash_pending(sid_key, q)                       # 本地题同记 source=local
     return q
 
 
@@ -508,14 +524,19 @@ def answer_option(sid: int, anon_id: str, option_id: str, option_text: str,
                 if o.get("tags") and not tags:
                     tags = [str(t)[:12] for t in o["tags"]][:6]   # 所选项 tags 进步级
                 pick_dim = o.get("dim") or ""
+    # L4 口径：source 取 next() 暂存的 pending_q（老会话 NULL 缺省 llm）
+    try:
+        _src = (json.loads(session["pending_q"]) or {}).get("source", "llm")
+    except (TypeError, json.JSONDecodeError):
+        _src = "llm"
     log.append({"step": session["step_index"], "question": question,
                 "option_id": option_id, "option_text": option_text,
-                "options": opts, "tags": tags,
+                "options": opts, "tags": tags, "source": _src,
                 **({"dim": str(pick_dim)[:40]} if locals().get("pick_dim") else {})})
     with db.tx() as conn:
         conn.execute(
             "UPDATE quiz_session SET question_log=?, step_index=step_index+1,"
-            " updated_at=? WHERE id=? AND anon_id=?",
+            " pending_q=NULL, updated_at=? WHERE id=? AND anon_id=?",
             (json.dumps(log, ensure_ascii=False), _now(), sid, anon_id))
     return get_session(sid, anon_id)
 

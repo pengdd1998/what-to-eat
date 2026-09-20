@@ -12,15 +12,18 @@ from ..core import db
 PALETTE = ["#e8b93e", "#7bc8a4", "#e88d5a", "#8aa8d8", "#c98ad8", "#d87d7d"]
 
 
-def overview(days: int = 14) -> dict:
-    """看板数据总装：概览卡＋四区。"""
+def overview(days: int = 14, f_status=None, f_ec=None, f_task=None,
+              f_days=7) -> dict:
+    """看板数据总装：概览卡＋四区（明细四维筛选）。"""
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     trend = _trend(days)
     today_card = _today_card(today)
-    detail = _detail_rows(today)
+    detail = _detail_rows(today, f_status=f_status, f_ec=f_ec,
+                          f_task=f_task, f_days=f_days)
     audit = _audit_rows()
     return {"today": today, "days": days, "trend": trend,
-            "card": today_card, "detail": detail, "audit": audit}
+            "card": today_card, "detail": detail, "audit": audit,
+            "hourly": _today_hourly(today)}
 
 
 def _trend(days: int) -> dict:
@@ -32,12 +35,28 @@ def _trend(days: int) -> dict:
     out = {"dates": dates}
     for metric in ("llm_p95_ms", "llm_p50_ms", "llm_cost_usd", "llm_calls",
                    "llm_success_rate", "quiz_question_llm_rate",
-                   "quiz_finalize_local_rate"):
-        rows = {r["metric_date"]: _num(r["value"])
-                for r in conn.execute(
-                    "SELECT metric_date, value FROM daily_metrics "
-                    "WHERE metric=? AND metric_date>=?", (metric, start))}
-        out[metric] = [rows.get(d) for d in dates]
+                   "quiz_finalize_local_rate", "llm_retry_rate",
+                   "llm_soft_timeout_rate", "llm_tokens_in_sum",
+                   "llm_tokens_out_sum"):
+        rows_m = {r["metric_date"]: _num(r["value"])
+                  for r in conn.execute(
+                      "SELECT metric_date, value FROM daily_metrics "
+                      "WHERE metric=? AND metric_date>=?", (metric, start))}
+        out[metric] = [rows_m.get(d) for d in dates]
+    # error_dist 展开（value=JSON dict → 五枚举各一条序列）
+    ec_series = {}
+    for r in conn.execute("SELECT metric_date, value FROM daily_metrics "
+                          "WHERE metric='llm_error_dist' AND metric_date>=?",
+                          (start,)):
+        try:
+            dist = json.loads(r["value"]) if r["value"] else {}
+        except json.JSONDecodeError:
+            dist = {}
+        ec_series.setdefault(r["metric_date"], {}).update(dist)
+    _ecs = sorted({k for v in ec_series.values() for k in v})
+    for ec in _ecs:
+        out[f"ec:{ec}"] = [ec_series.get(d, {}).get(ec) for d in dates]
+    out["_error_classes"] = _ecs
     return out
 
 
@@ -47,6 +66,23 @@ def _num(v):
         return f
     except (ValueError, TypeError, json.JSONDecodeError):
         return None
+
+
+def _today_hourly(today: str):
+    """今日 UTC 小时桶（CCR「今天·按小时分桶」；实时 SQL 不加聚合任务）。
+    口径 UTC——与全仓指标 UTC 日界一致（cron.md §3）。"""
+    conn = db.connect()
+    rows = {r["h"]: dict(r) for r in conn.execute(
+        "SELECT substr(ts,12,2) h, COUNT(*) c, COALESCE(SUM(cost_usd),0) cost "
+        "FROM llm_calls WHERE substr(ts,1,10)=? GROUP BY h", (today,))}
+    now_h = datetime.now(timezone.utc).hour
+    hours, calls, cost = [], [], []
+    for h in range(0, now_h + 1):
+        hh = f"{h:02d}"
+        hours.append(hh)
+        calls.append(rows.get(hh, {}).get("c", 0))
+        cost.append(round(rows.get(hh, {}).get("cost", 0.0), 4))
+    return {"hours": hours, "calls": calls, "cost": cost}
 
 
 def _today_card(today: str) -> dict:
@@ -78,12 +114,31 @@ def _today_card(today: str) -> dict:
             "question_llm_rate": _num(m["value"]) if m else None}
 
 
-def _detail_rows(today: str, limit: int = 50):
-    conn = db.connect()
-    return [dict(r) for r in conn.execute(
-        "SELECT ts, vendor, task, scene, latency_ms, tokens_in, tokens_out, "
-        "cost_usd, status, error_class, attempts FROM llm_calls "
-        "ORDER BY id DESC LIMIT ?", (limit,))]
+_EC_ENUM = {"timeout", "rate_limited", "content_filter", "parse_failed", "unknown"}
+_TASK_ENUM = {"next_question", "finalize", "cold_start", "batch_copy"}
+
+
+def _detail_rows(today: str, limit: int = 200, f_status=None, f_ec=None,
+                 f_task=None, f_days=7):
+    """明细四维筛选（CCR 日志页零 JS 子集）：全部白名单枚举防脏链接。"""
+    where, args = [], []
+    if f_status in ("ok", "error"):
+        where.append("status=?"); args.append(f_status)
+    if f_ec in _EC_ENUM:
+        where.append("error_class=?"); args.append(f_ec)
+    if f_task in _TASK_ENUM:
+        where.append("task=?"); args.append(f_task)
+    if f_days in (1, 7, 30):
+        since = (datetime.now(timezone.utc)
+                 - timedelta(days=f_days)).strftime("%Y-%m-%d")
+        where.append("substr(ts,1,10)>=?"); args.append(since)
+    sql = ("SELECT ts, vendor, model, task, scene, latency_ms, tokens_in, "
+           "tokens_out, cost_usd, status, error_class, attempts FROM llm_calls")
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY id DESC LIMIT ?"
+    args.append(limit)
+    return [dict(r) for r in db.connect().execute(sql, args)]
 
 
 def _audit_rows(limit: int = 20):
@@ -186,3 +241,44 @@ def svg_stack(series, labels, w=560, h=160):
         lx += 14 + 10 * len(lab)
     parts.append("</g></svg>")
     return "".join(parts)
+
+
+def recent_sessions(limit: int = 20):
+    """近 N 会话列表（trace 入口）。"""
+    conn = db.connect()
+    rows = []
+    for r in conn.execute(
+            "SELECT id, anon_id, state, step_index, meal_scenario, result, "
+            "created_at FROM quiz_session ORDER BY id DESC LIMIT ?", (limit,)):
+        d = dict(r)
+        try:
+            res = json.loads(d.pop("result") or "{}")
+        except json.JSONDecodeError:
+            res = {}
+        d["dish"] = res.get("name", "")
+        d["source"] = res.get("source", "")
+        d["local_reason"] = res.get("local_reason", "")
+        d["anon_short"] = (d.pop("anon_id") or "")[:12]
+        rows.append(d)
+    return rows
+
+
+def session_trace(sid: int):
+    """单会话 trace：question_log 逐题时间线＋result 摘要。"""
+    conn = db.connect()
+    r = conn.execute(
+        "SELECT id, anon_id, state, step_index, meal_scenario, question_log, "
+        "result, created_at FROM quiz_session WHERE id=?", (sid,)).fetchone()
+    if not r:
+        return None
+    d = dict(r)
+    try:
+        d["steps"] = json.loads(d.pop("question_log") or "[]")
+    except json.JSONDecodeError:
+        d["steps"] = []
+    try:
+        d["res"] = json.loads(d.pop("result") or "{}")
+    except json.JSONDecodeError:
+        d["res"] = {}
+    d["anon_short"] = (d.pop("anon_id") or "")[:12]
+    return d

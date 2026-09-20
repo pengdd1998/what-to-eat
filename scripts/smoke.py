@@ -264,6 +264,18 @@ def main():
         f"owner:{ADMIN_TOKEN}".encode()).decode())
     dash_html = urllib.request.urlopen(req, timeout=10).read().decode()
     check("看板带凭据 200 含 SVG/概览", "<svg" in dash_html and "LLM 能力看板" in dash_html)
+    check("看板工作台化（监控 v2：小时桶/筛选/model 列）",
+          "今日实时" in dash_html and "f_ec" in dash_html and "<th>model</th>" in dash_html)
+    dash2 = urllib.request.urlopen(urllib.request.Request(
+        f"{ADMIN}/admin/llm?days=7&f_task=finalize&f_days=1",
+        headers={"Authorization": "Basic " + _b64a.b64encode(
+            f"owner:{ADMIN_TOKEN}".encode()).decode()}), timeout=10).read().decode()
+    check("明细筛选 f_task=finalize 200", "finalize" in dash2)
+    sess_html = urllib.request.urlopen(urllib.request.Request(
+        f"{ADMIN}/admin/llm/sessions",
+        headers={"Authorization": "Basic " + _b64a.b64encode(
+            f"owner:{ADMIN_TOKEN}".encode()).decode()}), timeout=10).read().decode()
+    check("sessions 页 200", "选餐会话" in sess_html)
     st, _, ov = call("GET", "/api/admin/llm/overview?days=7", base=ADMIN,
                      token=ADMIN_TOKEN)
     check("overview JSON 键齐全", st == 200 and

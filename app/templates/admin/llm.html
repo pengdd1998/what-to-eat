@@ -1,42 +1,22 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LLM 能力看板 · 吃什么 Admin</title>
-<style>
-  :root{--bg:#101a15;--card:#182620;--line:#2c3f36;--ink:#e8e4d8;--dim:#9aa89e;--y:#e8b93e}
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);
-    font:14px/1.6 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:16px}
-  h1{font-size:18px;margin:0 0 4px}h2{font-size:15px;margin:18px 0 8px;color:var(--y)}
-  .sub{color:var(--dim);font-size:12px;margin-bottom:14px}
-  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
-  .kpi{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
-  .kpi .v{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
-  .kpi .l{color:var(--dim);font-size:12px}
-  .kpi .n{color:var(--dim);font-size:11px}
-  .chartbox{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px;margin:8px 0}
-  .chartbox h3{margin:0 0 6px;font-size:13px;color:var(--dim)}
-  table{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
-  th,td{padding:4px 8px;border-bottom:1px solid var(--line);text-align:left}
-  th{color:var(--dim);font-weight:400}
-  .ok{color:#7bc8a4}.err{color:#d87d7d}.warn{color:var(--y)}
-  nav a{color:var(--dim);margin-right:12px;text-decoration:none}
-  nav a.on{color:var(--y);border-bottom:2px solid var(--y)}
-  svg.chart{width:100%;height:auto}
-  svg.empty text{fill:#667}
-</style>
-</head>
-<body>
-<h1>LLM 能力看板</h1>
-<p class="sub">{{ card.date }} · 五层指标（可用性/性能/成本/质量/业务） · prompt 原文永不入库</p>
+{% extends "base.html" %}
+{% block title %}LLM 能力看板 · 吃什么 Admin{% endblock %}
+{% block h1 %}LLM 能力看板 <small style="font-size:12px;color:#888">{{ card.date }} · 五层指标</small>{% endblock %}
+{% block main %}
 <nav>
   {% for d in (7, 14, 30) %}
   <a href="/admin/llm?days={{ d }}" {% if d == days %}class="on"{% endif %}>{{ d }} 天</a>
   {% endfor %}
   <a href="/api/admin/llm/overview?days={{ days }}">JSON</a>
 </nav>
+
+<h2>今日实时（UTC 小时桶：{{ hours_axis }}）</h2>
+<div class="chartbox"><h3>时调用次数</h3>{{ svg_h_calls | safe }}</div>
+<div class="chartbox"><h3>时费用（$）</h3>{{ svg_h_cost | safe }}</div>
+
+<h2>概览（{{ card.date }}）</h2>
+
+</head>
+<body>
 
 <h2>概览（{{ card.date }}）</h2>
 <div class="grid">
@@ -55,15 +35,34 @@
 
 <h2>结构与能力质量</h2>
 <div class="chartbox"><h3>收口本地兜底率（% / 目标 &lt;30）</h3>{{ svg_local | safe }}</div>
-<div class="chartbox"><h3>出题 LLM 占比（% / 目标 &gt;70）</h3>{{ svg_ql | safe }}</div>
+<div class="chartbox"><h3>出题 LLM 占比（% / 目标 &gt;70，0008 后口径可信）</h3>{{ svg_ql | safe }}</div>
+<div class="chartbox"><h3>重试率（%）</h3>{{ svg_retry | safe }}</div>
+<div class="chartbox"><h3>软超时占比（% / &gt;3s）</h3>{{ svg_soft | safe }}</div>
+{% if svg_ec %}<div class="chartbox"><h3>error_class 分布（堆叠）</h3>{{ svg_ec | safe }}</div>{% endif %}
+<div class="chartbox"><h3>tokens out 日和</h3>{{ svg_tokens | safe }}</div>
 
-<h2>明细（近 50 条，无 prompt 原文）</h2>
+<h2>明细（筛选日志 · 无 prompt 原文）</h2>
 <div class="chartbox">
+<form method="get" action="/admin/llm" style="margin-bottom:8px;display:flex;gap:8px;flex-wrap:wrap">
+  <input type="hidden" name="days" value="{{ days }}">
+  <select name="f_status"><option value="">全部状态</option>
+    <option value="ok" {% if f_status=='ok' %}selected{% endif %}>ok</option>
+    <option value="error" {% if f_status=='error' %}selected{% endif %}>error</option></select>
+  <select name="f_ec"><option value="">全部错误类</option>
+    {% for e in ('timeout','rate_limited','content_filter','parse_failed','unknown') %}
+    <option value="{{ e }}" {% if f_ec==e %}selected{% endif %}>{{ e }}</option>{% endfor %}</select>
+  <select name="f_task"><option value="">全部任务</option>
+    {% for t in ('next_question','finalize','cold_start','batch_copy') %}
+    <option value="{{ t }}" {% if f_task==t %}selected{% endif %}>{{ t }}</option>{% endfor %}</select>
+  <select name="f_days">{% for d in (1,7,30) %}
+    <option value="{{ d }}" {% if f_days==d %}selected{% endif %}>{{ d }} 天</option>{% endfor %}</select>
+  <button type="submit">筛选</button>
+</form>
 <table>
-  <tr><th>ts</th><th>task</th><th>vendor</th><th>latency</th><th>tokens i/o</th><th>cost</th><th>status</th><th>error_class</th><th>att</th></tr>
+  <tr><th>ts</th><th>task</th><th>model</th><th>vendor</th><th>latency</th><th>tokens i/o</th><th>cost</th><th>status</th><th>error_class</th><th>att</th></tr>
   {% for r in detail %}
   <tr>
-    <td>{{ r.ts[5:19] }}</td><td>{{ r.task or r.scene }}</td><td>{{ r.vendor }}</td>
+    <td>{{ r.ts[5:19] }}</td><td>{{ r.task or r.scene }}</td><td>{{ r.model or '—' }}</td><td>{{ r.vendor }}</td>
     <td>{{ r.latency_ms }}</td><td>{{ r.tokens_in or '—' }}/{{ r.tokens_out or '—' }}</td>
     <td>{{ '%.3f'|format(r.cost_usd or 0) }}</td>
     <td class="{{ 'ok' if r.status == 'ok' else 'err' }}">{{ r.status }}</td>
@@ -84,6 +83,5 @@
   {% endfor %}
 </table>
 </div>
-<p class="sub">口径：趋势＝daily_metrics（cron 聚合）；当日＝实时只读 SQL。老数据 task 为 NULL 显示 scene。</p>
-</body>
-</html>
+<p class="sub">口径：趋势＝daily_metrics（cron 聚合）；当日＝实时只读 SQL。老数据 task/model 为 NULL。会话级 trace 见「会话」页。</p>
+{% endblock %}

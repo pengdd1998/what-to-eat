@@ -171,22 +171,26 @@ def generate_recommendation(conn, ctx: dict):
         params={"temperature": cfg.get("temperature", 0.7),
                 "disable_thinking": cfg.get("disable_thinking", True)})
     if not res["ok"]:
-        _log_call(conn, provider, "cold_start", res["latency_ms"], 0.0, "error")
+        _log_call(conn, provider, "cold_start", res["latency_ms"], 0.0, "error",
+                  model=r["model"])
         return None
     _log_call(conn, provider, "cold_start", res["latency_ms"],
               cfg.get("cost_per_call_usd", 0.01), "ok",
-              tokens=(res["input_tokens"], res["output_tokens"]))
+              tokens=(res["input_tokens"], res["output_tokens"]),
+              model=r["model"])
     content = res["content"]
     # 模型可能带 ```json 围栏或前后杂讯——截取首个 { 到末个 } 再解析（PoC-4 实测）
     s, e = content.find("{"), content.rfind("}")
     if s < 0 or e <= s:
         # 与原实现同语义：ok 行已落，解析失败再落 error 行（熔断计数含 error）
-        _log_call(conn, provider, "cold_start", res["latency_ms"], 0.0, "error")
+        _log_call(conn, provider, "cold_start", res["latency_ms"], 0.0, "error",
+                  model=r["model"])
         return None
     try:
         return json.loads(content[s:e + 1])
     except ValueError:
-        _log_call(conn, provider, "cold_start", res["latency_ms"], 0.0, "error")
+        _log_call(conn, provider, "cold_start", res["latency_ms"], 0.0, "error",
+                  model=r["model"])
         return None
 
 

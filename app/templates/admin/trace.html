@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}会话 #{{ s.id }} trace · 吃什么 Admin{% endblock %}
+{% block h1 %}会话 #{{ s.id }} · {{ s.meal_scenario or '—' }} · {{ s.state }}{% endblock %}
+{% block main %}
+<div class="chartbox">
+<h3>答题时间线（{{ s.steps | length }} 步）</h3>
+<table>
+  <tr><th>#</th><th>问题</th><th>用户选择</th><th>来源</th><th>tags</th><th>dim</th></tr>
+  {% for st in s.steps %}
+  <tr>
+    <td>{{ st.step }}</td><td>{{ (st.question or '')[:36] }}</td>
+    <td>{{ (st.option_text or '')[:20] }}</td>
+    <td class="{{ 'err' if st.source == 'local' else 'ok' }}">{{ st.source or 'llm*' }}</td>
+    <td>{{ (st.tags or []) | join(',') }}</td><td>{{ (st.options and st.options[0].get('dim','') if st.options else '') }}</td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+{% if s.res %}
+<div class="chartbox">
+<h3>收口结果</h3>
+<p>菜名：<b>{{ s.res.get('name','') }}</b> · source={{ s.res.get('source','') }} · local_reason={{ s.res.get('local_reason','') or '—' }}</p>
+<p style="color:#aaa">{{ s.res.get('reason','') }}</p>
+</div>
+{% endif %}
+<p class="sub">* llm*＝0008 之前的老会话（source 未落库，口径失真期）；{{ s.created_at }}</p>
+{% endblock %}
