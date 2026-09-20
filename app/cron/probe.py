@@ -1,6 +1,7 @@
 """cron/probe（阶段3拆分自 app/cron.py）。"""
 import json
 import os
+import urllib.request   # P0-1（monitoring-workbench-plan §3）：阶段3拆分丢失绑定→全探活 NameError 被 except 吞成假 fail
 from datetime import datetime, timezone
 
 from ..core import db
@@ -61,8 +62,13 @@ def probe() -> dict:
         all_red = link_keys and all(results[k] == "fail" for k in link_keys)
         ctrl_green = results.get("ctrl") == "ok"
         flipped = False
+        pending_notify = None
         all_green = link_keys and all(results[k] == "ok" for k in link_keys)
-        if all_red and ctrl_green:             # 平台封禁判定 → 自动全局兜底
+        if (all_red and ctrl_green
+                and links.get("status") != "dead"):
+            # 评审发现 A（翻转触发）：仅 ok→dead 翻转发 P1＋audit；持续 dead 静默
+            # （深链持续死不值得每日 P1 重复打扰——跳转已下线用户面影响为零，§0 发现 B）。
+            # config 幂等重写保留（与实际状态对齐，可自愈人为误改）。
             cfg = {**links, "status": "dead"}
             t.execute(
                 "INSERT INTO config(key,value,updated_at) VALUES('links',?,?) "
@@ -77,8 +83,8 @@ def probe() -> dict:
                  json.dumps(results, ensure_ascii=False),
                  datetime.now(timezone.utc).isoformat(timespec="seconds")))
             flipped = True
-            notify("P1: 深链探活全红，已自动置全局兜底",
-                   json.dumps(results, ensure_ascii=False), "P1")  # X6 实接（U10）
+            pending_notify = ("P1: 深链探活全红，已自动置全局兜底",
+                              json.dumps(results, ensure_ascii=False), "P1")
         elif (all_green and ctrl_green            # 修复事故 2026-09-15：只置死不恢复，
               and links.get("status") == "dead"):  # 全红事件后深链永久卡 dead
             cfg = {**links, "status": "ok"}
@@ -95,5 +101,8 @@ def probe() -> dict:
                  json.dumps(results, ensure_ascii=False),
                  datetime.now(timezone.utc).isoformat(timespec="seconds")))
             flipped = True
-            notify("P2: 深链探活恢复全绿，links.status 已自动翻回 ok", "", "P2")
+            pending_notify = ("P2: 深链探活恢复全绿，links.status 已自动翻回 ok",
+                              "", "P2")
+    if pending_notify:                        # notify 在 tx 外（禁持锁做网络 IO）
+        notify(*pending_notify)
     return {"date": date, "results": results, "auto_fallback": flipped}
