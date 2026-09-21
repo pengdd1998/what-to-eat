@@ -23,6 +23,10 @@ services:
       - api-data:/data
       # ip2region 离线库（IP→市级，天气用）：宿主 data/ 只读挂入，仓库不含二进制
       - ./data/ip2region.xdb:/app/ip2region.xdb:ro
+    networks:
+      default: {}
+      edge-net:                       # 平台阶段 A0（ci-cd-plan §4）：edge-caddy 反代别名
+        aliases: [wt-api]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=2)"]
       interval: 30s
@@ -70,3 +74,7 @@ volumes:
   api-data:
   caddy-data:
   caddy-config:
+
+networks:
+  edge-net:
+    external: true
