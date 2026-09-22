@@ -5,9 +5,13 @@ set -euo pipefail
 
 # 多行 PEM 须落临时文件（内联 -i 会把后续行当参数）
 KEY_FILE=$(mktemp); printf '%s\n' "$VPS_SSH_KEY" > "$KEY_FILE"; chmod 600 "$KEY_FILE"
-trap 'rm -f "$KEY_FILE"' EXIT
-SSH="ssh -i $KEY_FILE -p $VPS_PORT -o StrictHostKeyChecking=accept-new $VPS_USER@$VPS_HOST"
-SCP="scp -i $KEY_FILE -P $VPS_PORT -o StrictHostKeyChecking=accept-new"
+CM_DIR=$(mktemp -d)
+trap 'rm -f "$KEY_FILE"; ssh -o ControlPath=$CM_DIR/cm -O exit $VPS_USER@$VPS_HOST >/dev/null 2>&1; rm -rf "$CM_DIR"' EXIT
+# ControlMaster 复用（2026-09-21 限流事故根治）：八步共享一条主连接，
+# 免每步独立握手——runner 高频部署曾触发 sshd 限流 kex reset
+CM_OPTS="-o ControlMaster=auto -o ControlPath=$CM_DIR/cm -o ControlPersist=120"
+SSH="ssh $CM_OPTS -i $KEY_FILE -p $VPS_PORT -o StrictHostKeyChecking=accept-new $VPS_USER@$VPS_HOST"
+SCP="scp -o ControlPath=$CM_DIR/cm -i $KEY_FILE -P $VPS_PORT -o StrictHostKeyChecking=accept-new"
 
 echo "[deploy] 1/8 preflight（内存/磁盘守卫＋cron 窗口告警）"
 PREFLIGHT_B64=$(base64 -w0 <<'REMOTE'
