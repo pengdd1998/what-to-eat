@@ -19,6 +19,11 @@ services:
       GO_SECRET: ${GO_SECRET:-}       # 生产注入 ≥32 字节随机（SUP-02；空则代码内 dev 兜底并告警）
       LLM_BASE_URL: ${LLM_BASE_URL:-}
       LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-}       # ping 连通性检测（监控 v2 P2-1）
+      GLM_BASE_URL: ${GLM_BASE_URL:-}
+      GLM_MODEL: ${GLM_MODEL:-}
+      QWEN_BASE_URL: ${QWEN_BASE_URL:-}
+      QWEN_MODEL: ${QWEN_MODEL:-}
     volumes:
       - api-data:/data
       # ip2region 离线库（IP→市级，天气用）：宿主 data/ 只读挂入，仓库不含二进制
