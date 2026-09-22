@@ -55,6 +55,15 @@ services:
     environment:
       WTE_DB_PATH: /data/app.db
       ADMIN_TOKEN: ${ADMIN_TOKEN:-}   # 生产注入 ≥64 字符随机值（SUP-02）
+      LLM_BASE_URL: ${LLM_BASE_URL:-}        # ping 连通性检测（admin 面发起）
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      GLM_BASE_URL: ${GLM_BASE_URL:-}
+      GLM_API_KEY: ${GLM_API_KEY:-}
+      GLM_MODEL: ${GLM_MODEL:-}
+      QWEN_BASE_URL: ${QWEN_BASE_URL:-}
+      QWEN_API_KEY: ${QWEN_API_KEY:-}
+      QWEN_MODEL: ${QWEN_MODEL:-}
     volumes:
       - api-data:/data
     healthcheck:
