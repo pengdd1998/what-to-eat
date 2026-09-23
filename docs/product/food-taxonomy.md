@@ -2,6 +2,7 @@
 
 > 2026-09-16 整理 · 供研发重构 `app/domain/dimensions.py` 的树定义使用
 > 2026-09-20 对账修订：附录 F 与 migrations/0006 冲突消解（F.1 已入库 7 道以 0006 为准/F.2 新候选 13 道补 slug）；本地池计数 22；根因＝图谱与迁移正本协作脱节
+> 2026-09-23 v1.4：F.1 对账漏记补全（关东煮/白粥配小菜，0006 实为 9 道）；三菜双挂裁决落附录 D（凉拌鸡丝凉面/小笼包配粥/味噌汤定食）；本地池 22 道逐道重算；新增附录 G 树定义机器可读草案（唯一编译口径）＋附录 H 新旧 id 迁移映射
 > 定位：**领域知识底座**，不是代码方案——树怎么改、分几期上，归 owner 拍板（AGENTS.md「拍板权归人」）
 > 对接对象：CHAIN（分类链）/ ORTHOGONAL（正交维度）/ `_DISH_HINTS`（收口一致性）/ LOCAL_BANK（本地题库）/ 菜池 tags 词表
 
@@ -101,7 +102,7 @@ tags 池：`面食` `米粉` `米饭` `带馅` `饼类`
 #### `filled` 带馅面食
 - **定位**：皮包馅，仪式感与满足感都在那一口。
 - **tags**：`带馅` `面食`
-- **代表菜**：**猪肉大葱水饺**、**锅贴饺子**、**小笼包配粥**、三鲜水饺、蒸饺、虾饺、烧麦、生煎包、韭菜盒子
+- **代表菜**：**猪肉大葱水饺**、**锅贴饺子**、三鲜水饺、蒸饺、生煎包、韭菜盒子（小笼/虾饺/烧麦归 `light-dimsum`——点心点单心智，仲裁见附录 D）
 - **L3 细化**：
   - `filled-boil` 水煮（水饺/馄饨）`汤`
   - `filled-fry` 煎烙（锅贴/生煎/盒子）`香` `酥脆`
@@ -170,7 +171,7 @@ tags 池：`汤` `暖` `烫煮` `粥`
 #### `pot-soup` 炖汤煲汤
 - **定位**：这顿的意义就是那口热汤，菜与主食都是汤的配角。
 - **tags**：`汤` `暖`
-- **代表菜**：**番茄牛腩煲**、**胡椒猪肚鸡汤**、**清炖排骨汤**、**砂锅鱼头豆腐**、**酸辣汤**、**上汤娃娃菜虾仁云吞**、**蔬菜豆腐味噌汤定食**、老鸭汤、玉米排骨汤、瓦罐汤
+- **代表菜**：**番茄牛腩煲**、**胡椒猪肚鸡汤**、**清炖排骨汤**、**砂锅鱼头豆腐**、**酸辣汤**、**上汤娃娃菜虾仁云吞**、老鸭汤、玉米排骨汤、瓦罐汤（味噌汤定食归 `light-salad`——定食套餐心智，仲裁见附录 D）
 - **L3 细化**：
   - `soup-meat` 肉汤浓煲（牛腩煲/猪肚鸡/排骨）`肉` `暖`
   - `soup-fish-tofu` 鱼头豆腐砂锅 `鱼鲜` `鲜`
@@ -204,7 +205,7 @@ tags 池：`凉拌` `清爽` `小食`
 #### `light-cold` 凉拌系
 - **定位**：凉菜也能当正餐——口水鸡下饭，凉皮管饱。
 - **tags**：`凉拌` `清爽`
-- **代表菜**：**口水鸡**、**凉拌鸡丝凉面**、**捞汁凉面卤味拼**、**肉夹馍配凉皮**（凉皮部分）、拍黄瓜、凉拌木耳、大拌菜
+- **代表菜**：**口水鸡**、**捞汁凉面卤味拼**、**肉夹馍配凉皮**（凉皮部分）、拍黄瓜、凉拌木耳、大拌菜（凉拌鸡丝凉面归 `noodle-dry·cold`——凉面主食心智，仲裁见附录 D）
 - **L3 细化**：
   - `cold-meat` 荤凉（口水鸡/白切/夫妻肺片）`肉` `开胃`
   - `cold-veg` 素凉（凉皮/拍黄瓜/大拌菜）`蔬菜`
@@ -213,7 +214,7 @@ tags 池：`凉拌` `清爽` `小食`
 #### `light-salad` 冷轻食
 - **定位**：清爽不将就，波奇/谷物碗/三明治的现代轻餐。
 - **tags**：`清爽` `冰凉`
-- **代表菜**：**三文鱼波奇饭**（波奇以「冷饭主体」归此，与 `rice-bowl` 的界在冷热）、考伯沙拉、凯撒沙拉、金枪鱼沙拉、谷物碗、饭团
+- **代表菜**：**三文鱼波奇饭**（波奇以「冷饭主体」归此，与 `rice-bowl` 的界在冷热）、**蔬菜豆腐味噌汤定食**、考伯沙拉、凯撒沙拉、金枪鱼沙拉、谷物碗、饭团
 - **L3 细化**：
   - `salad-poke` 波奇/谷物碗 `鱼鲜`
   - `salad-sandwich` 三明治/饭团 `饼类`
@@ -314,7 +315,7 @@ tags 池：`凉拌` `清爽` `小食`
 | 组 | 词 | 备注 |
 |---|---|---|
 | 主料形态 | 面食 / 米粉 / 米饭 / 带馅 / 饼类 / 粥 | `米粉`/`饼类`/`粥` 新增 |
-| 蛋白 | 肉 / 牛肉 / 猪肉 / 鸡鸭 / 鱼鲜 / 蛋 / 豆腐 | `鱼鲜` 新增并吸纳海鲜 |
+| 蛋白 | 肉 / 牛肉 / 猪肉 / 鸡鸭 / 鱼鲜 / 蛋 / 豆腐 / 蔬菜 | `鱼鲜` 新增并吸纳海鲜；`蔬菜` v1.4 补录（品类卡与 LOCAL_DISHES 早有使用，初版词表漏记） |
 | 做法 | 汤 / 炒 / 炖卤 / 红烧 / 烤 / 煎 / 炸 / 蒸 / 凉拌 / 烫煮 | `烫煮` 新增 |
 | 味型 | 不辣 / 微辣 / 中辣 / 爆辣 / 麻辣 / 酸辣 / 酸甜 / 咸鲜 / 蒜香 / 番茄 / 咖喱 / 甜口 | 麻辣/蒜香/番茄/咖喱 新增 |
 | 质感 | 清淡 / 浓郁 / 清爽 / 酥脆 / 软糯 / 嫩 / 下饭 | 酥脆/软糯/嫩 新增 |
@@ -531,7 +532,7 @@ env_ctx 已注入场景与天气 hint，图谱提供加权方向（供 LLM 出�
 | 面食 | 1 | filled（锅贴） |
 | 煲仔饭 | 1 | rice-bowl（煲仔） |
 
-本地池 22 道：noodle-soup 4 / rice-bowl 7 / filled 2 / noodle-dry 2 / meat-braise 2 / meat-grill 2 / light-cold 2 / light-salad 1（味噌汤定食）/ pot-tang 1（麻辣烫）/ pot-congee 1（皮蛋瘦肉粥）/ light-dimsum 1（小笼包配粥）——**全部可挂，零孤儿**。菜库侧 pot-tang/pot-congee/light-dimsum 已由 0006 补种 9 道（附录 F.1），增厚候选见附录 F.2。
+本地池 22 道逐道核算（v1.4，按附录 D 仲裁后口径）：noodle-soup 5（牛肉面/小面/酸辣粉/拉面/云吞面）/ rice-bowl 7（番茄鸡蛋·麻婆豆腐·黄焖鸡·红烧肉·咖喱·牛丼·扬州炒饭）/ noodle-dry 2（肉夹馍配凉皮/凉拌鸡丝凉面，后者依仲裁自 light-cold 移入）/ filled 1（水饺；小笼包配粥依仲裁移 light-dimsum）/ meat-grill 2（手撕烤鸡饭/香煎牛排）/ light-cold 1（口水鸡）/ light-salad 1（味噌汤定食）/ pot-tang 1（麻辣烫）/ pot-congee 1（皮蛋瘦肉粥）/ light-dimsum 1（小笼包配粥）＝22，**唯一挂载，零孤儿零双挂**。菜库侧 pot-tang/pot-congee/light-dimsum 已由 0006 补种 9 道（附录 F.1，v1.4 补全两道漏记），增厚候选见附录 F.2。
 
 ### 10.1 图谱健康度指标（季度复检的量化口径）
 
@@ -688,6 +689,10 @@ env_ctx 已注入场景与天气 hint，图谱提供加权方向（供 LLM 出�
 | 蒸蛋羹/水蒸蛋 | pot-soup·veg | 汤水心智、家常清淡（菜库已录） |
 | 意面/焗饭 | noodle-dry·hot / rice-bowl | 意面无汤酱拌归干香；焗饭菜饭一体 |
 | 汉堡/披萨 | noodle-dry·wrap | 饼底主体；披萨大份分享场景弱，保留但 base_score 中位 |
+| 凉拌鸡丝凉面 | noodle-dry·cold | 凉面（主食）心智——虽带 `凉拌` tag，主体是面不是菜；`light-cold` 只收「凉菜当菜」的（口水鸡/拍黄瓜） |
+| 小笼包配粥 | light-dimsum·dimsum-canopy | 点单心智是点心店套餐；`filled` 只收水饺/锅贴/生煎等「面食正餐」级带馅 |
+| 蔬菜豆腐味噌汤定食 | light-salad | 「定食」＝轻食套餐心智；汤在该语境是配角——`pot-soup` 只收汤为主角的 |
+| 关东煮 | light-snack | 串物小食心智（虽有汤）——汤锅主体才归 pot 系；0006 迁移注释归 pot-tang 系历史笔误，图谱侧以本表为准 |
 
 ## 附录 E. 图谱自查记录（变更留痕）
 
@@ -697,22 +702,26 @@ env_ctx 已注入场景与天气 hint，图谱提供加权方向（供 LLM 出�
 | 2026-09-16 | v1.1 补强 | ①tag 一致性修复（`tang-hotpot` 去词表外 `自选`）；②新增 §6.1 菜系详图（含江浙沪，词表/主表同步）；③新增 §8 推荐语模板库、§9 收敛路径与步数预算（原 §8/§9 顺延为 §10/§11，引用已同步）；④附录 A 补 LLM 出题 JSON 范例 2 则（范例 1 两轮修正：选项须落所选 dimension 子树内，防链/tags 漂移）；⑤新增附录 C 新菜接入清单 |
 | 2026-09-16 | v1.2 治理补强 | ①`牛奶麦片粥` 归位 pot-congee（原挂 pot-soup）；②新增 §4.4 链×正交兼容性矩阵＋两道治理规则（出题前 ✕ 值过滤/单值隐式锁定、收口 ◐ 格降级序）；③新增 §9.4 模糊答案虚路径处理；④新增附录 D 边界仲裁表（23 案集中裁决）；⑤新增 A.2 golden 用例矩阵规划（见附录 A 末） |
 | 2026-09-18 | v1.3 闭环补强 | ①rice-bowl L3 收敛 4→3 支（rice-exotic 并入荤盖，异国味降为菜级 tag）；②§1 新增原则六「地域不引入」负面裁决（隐私口径：IP 城市仅天气用途）；③§5.2 补词表合规边界（功效暗示词判别法）；④新增 §9.5 换一同心圆探索序（三跳圈级/正交锁跨跳保留/分跳 accept 观测）；⑤新增 §10.1 图谱健康度指标（L2 覆盖/辣度分布/大系均衡/仲裁增长率/golden 通过率）；⑥新增附录 F 补种候选清单 20 道（需求向 tags，含图谱挂载与 ◐ 格亚型标注） |
+| 2026-09-20 | v1.3 对账修订 | 附录 F 与 0006 冲突消解（F.1/F.2 拆分）；本地池计数 22（注：对账时记「7 道入库」，v1.4 核实为 9 道） |
+| 2026-09-23 | v1.4 编译与勘误 | ①F.1 补全 0006 漏记 2 道（关东煮挂载差异按附录 D 仲裁标注、白粥配小菜）；②三菜双挂裁决入附录 D（凉拌鸡丝凉面→noodle-dry、小笼包配粥→light-dimsum、味噌汤定食→light-salad），品类卡代表菜同步去重；③§10 本地池 22 道逐道重算（原分布加总有误且含双挂）；④新增附录 G 树定义机器可读草案（CHAIN/ORTHOGONAL 字面量，唯一编译口径）；⑤新增附录 H 新旧 id 迁移映射（含 LEGACY_DIM_MAP 落地建议与 meat-rice 合并去向） |
 
 ## 附录 F. 菜库补种清单·对账版（v1.3 修订 2026-09-20）
 
-> **对账说明**：本清单原稿（9/18）列 20 道「可直接入库」，其中 7 道已被 `migrations/0006_taxonomy_seed.sql`（9/16 提交上生产）先行补种——**已入库 7 道以 0006 现行为准**（slug/tags/base_score 见 F.1 表，原稿 tags 作废勿执行）；**新候选 13 道**才走后续 `migrations/NNNN_*.sql` 流程（F.2 表，已补齐 `dish_slug` 列）。tags 一律用菜库需求向 9 词表；「图谱挂载」供 `LOCAL_DISHES` 与 `_DISH_HINTS` 同步用。
+> **对账说明**：本清单原稿（9/18）列 20 道「可直接入库」，其中 9 道已被 `migrations/0006_taxonomy_seed.sql`（9/16 提交上生产）先行补种——**已入库 9 道以 0006 现行为准**（slug/tags/base_score 见 F.1 表，原稿 tags 作废勿执行；v1.4 修正原对账漏记 2 道）；**新候选 13 道**才走后续 `migrations/NNNN_*.sql` 流程（F.2 表，已补齐 `dish_slug` 列）。tags 一律用菜库需求向 9 词表；「图谱挂载」供 `LOCAL_DISHES` 与 `_DISH_HINTS` 同步用。
 
-### F.1 已入库 7 道（0006 现行为准，勿重复种）
+### F.1 已入库 9 道（0006 现行为准，勿重复种；v1.4 补全两道对账漏记）
 
 | dish_slug（0006 现行） | 菜名 | category | tags（0006 现行） | base | 图谱挂载 | 与原稿差异 |
 |---|---|---|---|---|---|---|
 | malatang | 麻辣烫 | 简餐 | 想喝汤/重口味 | 0.72 | pot-tang·tang-malatang | tags/base 异 |
 | maocai | 冒菜 | 川菜 | 想喝汤/重口味 | 0.70 | pot-tang·tang-malatang | tags/base 异 |
+| guandongzhu | 关东煮 | 夜宵 | 想喝汤/想慢享 | 0.66 | **light-snack**（snack 系；见差异列） | **挂载异**：0006 注释按 pot-tang 补种，与附录 D 仲裁（关东煮→light-snack，串物小食心智）不一致——**图谱侧以仲裁为准，迁移侧 0006 已上生产不改**（expand-only），`_DISH_HINTS` 落地时关东煮关键词挂 light-snack |
 | pidanshourouzhou | 皮蛋瘦肉粥 | 粤式 | 想喝汤/清淡 | 0.74 | pot-congee·congee-meat | tags/base 异 |
 | shaguozhou | 砂锅虾粥 | 粤式 | 想喝汤/想慢享 | 0.70 | pot-congee·congee-meat | tags/base 异 |
+| baizhoupeicai | 白粥配小菜 | 粤式 | 想喝汤/清淡 | 0.60 | pot-congee·congee-plain | v1.4 补记（原表漏列） |
 | xiaolongbao | 小笼包 | 面食 | 想慢享/不吃辣 | 0.76 | light-dimsum·dimsum-canopy | tags/base 异 |
 | xiajiao | 水晶虾饺 | 粤式 | 想慢享/清淡 | 0.72 | light-dimsum·dimsum-canopy | 菜名/tags 异 |
-| changfen | 鲜虾肠粉 | 粤式 | 要快/想吃冷的/清淡 | 0.72 | light-dimsum·dimsum-rice-noodle | 菜名/tags 异 |
+| changfen | 鲜虾肠粉 | 粤式 | 要快/想吃冷的/清淡 | 0.72 | light-dimsum·dimsum-rice-noodle | 菜名/tags 异；tags「想吃冷的」与图谱「肠粉趁热吃更好」表述相左但属需求向口径，不改库，图谱侧出题不引用该菜做「冰凉」例证 |
 
 （另 0006 还种了关东煮 `guandongzhu`/白粥配小菜 `baizhoupeicai` 两道不在原稿内，一并生效。）
 
@@ -735,3 +744,147 @@ env_ctx 已注入场景与天气 hint，图谱提供加权方向（供 LLM 出�
 | hongshaodapai | 红烧大排 | 江浙 | 想吃热乎 | 0.7 | meat-braise·stew-pork | 同上 |
 
 > 入库后自查触发：§10.1 三个指标应同时达标（L2 覆盖升至 15/15；pot 系占比升至健康区间；不辣档占比回升）。补种走 `migrations/NNNN_*.sql` expand-only 流程（细则 `/db-migration`）。
+
+## 附录 G. 树定义机器可读草案（CHAIN/ORTHOGONAL，可直接移植 `dimensions.py`）
+
+> 本图谱各节的**编译产物**：结构与 `dimensions.py` 现行 dict 完全同构（`children`=必问层、`optional_children`=可选细化层），研发移植时替换 `CHAIN`/`ORTHOGONAL` 两个字面量即可，`build_state`/`available_dims`/`should_finalize` 等函数零改动（`_DISH_HINTS` 按附录 B/D 同步）。正交分期：第一版只上 spice＋texture（P0），protein/temp/pace 在阶段二解注。
+
+```python
+CHAIN = {
+    "id": "form", "name": "餐食形态", "tags": [],
+    "children": [
+        {"id": "staple", "name": "谷物主食系", "tags": ["面食", "米饭"],
+         "children": [
+             {"id": "noodle-soup", "name": "汤面·汤粉", "tags": ["面食", "米粉", "汤"],
+              "optional_children": [
+                  {"id": "noodle-rich", "name": "浇头豪横", "tags": ["肉", "汤"]},
+                  {"id": "noodle-clear", "name": "清汤简约", "tags": ["清淡", "鲜"]},
+                  {"id": "noodle-sour-spicy", "name": "酸辣开胃", "tags": ["酸辣", "开胃"]},
+              ]},
+             {"id": "rice-bowl", "name": "米饭系", "tags": ["米饭"],
+              "optional_children": [
+                  {"id": "rice-meat", "name": "荤盖浓香", "tags": ["肉", "浓郁", "下饭"]},
+                  {"id": "rice-light", "name": "素/蛋清爽", "tags": ["蔬菜", "清淡"]},
+                  {"id": "rice-fried", "name": "炒饭锅气", "tags": ["炒", "镬气"]},
+              ]},
+             {"id": "filled", "name": "带馅面食", "tags": ["带馅", "面食"],
+              "optional_children": [
+                  {"id": "filled-boil", "name": "水煮", "tags": ["汤"]},
+                  {"id": "filled-fry", "name": "煎烙", "tags": ["香", "酥脆"]},
+                  {"id": "filled-steam", "name": "蒸制", "tags": ["清淡"]},
+              ]},
+             {"id": "noodle-dry", "name": "干香主食", "tags": ["面食", "饼类"],
+              "optional_children": [
+                  {"id": "dry-hot", "name": "热拌浓酱", "tags": ["浓郁", "香"]},
+                  {"id": "dry-cold", "name": "凉吃爽口", "tags": ["凉拌", "清爽"]},
+                  {"id": "dry-wrap", "name": "饼卷堡夹", "tags": ["饼类", "肉"]},
+              ]},
+         ]},
+        {"id": "meat", "name": "硬菜小炒系", "tags": ["肉"],
+         "children": [
+             {"id": "meat-stir", "name": "家常小炒", "tags": ["炒", "肉", "镬气"],
+              "optional_children": [
+                  {"id": "stir-rice", "name": "下饭重口", "tags": ["下饭", "微辣"]},
+                  {"id": "stir-soft", "name": "家常温和", "tags": ["酸甜", "不辣"]},
+              ]},
+             {"id": "meat-braise", "name": "烧炖卤", "tags": ["炖卤", "肉", "暖"],
+              "optional_children": [
+                  {"id": "stew-pork", "name": "红烧肉系", "tags": ["浓郁", "甜口"]},
+                  {"id": "stew-chicken", "name": "黄焖鸡系", "tags": ["微辣", "下饭"]},
+                  {"id": "stew-beef", "name": "牛腩系", "tags": ["汤", "暖"]},
+              ]},
+             {"id": "meat-grill", "name": "烤煎炸", "tags": ["烤", "肉"],
+              "optional_children": [
+                  {"id": "grill-chicken", "name": "烤鸡炸鸡系", "tags": ["香", "酥脆"]},
+                  {"id": "grill-beef-pork", "name": "牛猪排系", "tags": ["浓郁"]},
+                  {"id": "grill-fish", "name": "烤鱼类", "tags": ["鱼鲜", "微辣"]},
+              ]},
+             {"id": "meat-fish", "name": "鱼鲜水煮", "tags": ["鱼鲜", "汤"],
+              "optional_children": [
+                  {"id": "fish-suancai", "name": "酸菜鱼系", "tags": ["酸辣", "开胃"]},
+                  {"id": "fish-tomato", "name": "番茄鱼汤系", "tags": ["番茄", "酸甜"]},
+                  {"id": "fish-boil", "name": "水煮沸腾系", "tags": ["麻辣", "爆辣"]},
+              ]},
+         ]},
+        {"id": "pot", "name": "汤锅烫煮系", "tags": ["汤", "暖"],
+         "children": [
+             {"id": "pot-soup", "name": "炖汤煲汤", "tags": ["汤", "暖"],
+              "optional_children": [
+                  {"id": "soup-meat", "name": "肉汤浓煲", "tags": ["肉", "暖"]},
+                  {"id": "soup-fish-tofu", "name": "鱼头豆腐砂锅", "tags": ["鱼鲜", "鲜"]},
+                  {"id": "soup-veg", "name": "素汤清汤", "tags": ["蔬菜", "清淡"]},
+              ]},
+             {"id": "pot-tang", "name": "烫煮自选", "tags": ["烫煮", "汤"],
+              "optional_children": [
+                  {"id": "tang-malatang", "name": "麻辣烫/冒菜", "tags": ["麻辣"]},
+                  {"id": "tang-chuan", "name": "串串/钵钵鸡", "tags": ["麻辣", "凉拌"]},
+                  {"id": "tang-hotpot", "name": "一人小火锅", "tags": ["暖", "烫煮"]},
+              ]},
+             {"id": "pot-congee", "name": "粥品", "tags": ["粥", "暖", "清淡"],
+              "optional_children": [
+                  {"id": "congee-meat", "name": "肉粥砂锅粥", "tags": ["肉", "鲜"]},
+                  {"id": "congee-plain", "name": "清粥小菜", "tags": ["清淡"]},
+              ]},
+         ]},
+        {"id": "light", "name": "轻食小食系", "tags": ["清爽"],
+         "children": [
+             {"id": "light-cold", "name": "凉拌系", "tags": ["凉拌", "清爽"],
+              "optional_children": [
+                  {"id": "cold-meat", "name": "荤凉", "tags": ["肉", "开胃"]},
+                  {"id": "cold-veg", "name": "素凉", "tags": ["蔬菜"]},
+              ]},
+             {"id": "light-salad", "name": "冷轻食", "tags": ["清爽", "冰凉"],
+              "optional_children": [
+                  {"id": "salad-poke", "name": "波奇/谷物碗", "tags": ["鱼鲜"]},
+                  {"id": "salad-sandwich", "name": "三明治/饭团", "tags": ["饼类"]},
+              ]},
+             {"id": "light-snack", "name": "小食解馋", "tags": ["小食", "解馋"],
+              "optional_children": [
+                  {"id": "snack-fried", "name": "炸物系", "tags": ["酥脆", "香"]},
+                  {"id": "snack-lu", "name": "卤味系", "tags": ["炖卤", "开胃"]},
+                  {"id": "snack-skewer", "name": "串串烤物", "tags": ["烤"]},
+              ]},
+             {"id": "light-dimsum", "name": "点心蒸笼", "tags": ["点心", "清淡"],
+              "optional_children": [
+                  {"id": "dimsum-canopy", "name": "小笼蒸饺", "tags": ["带馅"]},
+                  {"id": "dimsum-rice-noodle", "name": "肠粉", "tags": ["鲜"]},
+              ]},
+         ]},
+    ],
+}
+
+ORTHOGONAL = [
+    {"id": "spice", "name": "辣度", "values": ["不辣", "微辣", "中辣", "爆辣"]},
+    {"id": "texture", "name": "浓淡", "values": ["清淡", "浓郁"]},      # v1 收敛二值；旧会话「清爽」→清淡、「暖」→temp（build_state 容错）
+    # ---- 阶段二解注（§4.2 P1/P2）----
+    # {"id": "protein", "name": "蛋白主料", "values": ["牛肉", "猪肉", "鸡鸭", "鱼鲜"]},
+    # {"id": "temp", "name": "温度", "values": ["热乎", "温热", "冰凉"]},
+    # {"id": "pace", "name": "节奏", "values": ["要快", "慢享"]},
+]
+```
+
+与文字版（§3 品类卡）如有出入，**以本附录 G 为准**（本附录是唯一编译口径）；词表仍以 §5.1 为唯一源，本附录所有 tags 均出自该表。
+
+## 附录 H. 新旧维度 id 迁移映射（重构兼容）
+
+> 重构 `dimensions.py` 后，**历史会话 `question_log[].dim` 仍是旧 id**——`build_state` 的 `find_node` 将失配落回 `_guess_chain_node` 启发（现机制可容错但精度低）。建议随重构加 `LEGACY_DIM_MAP` 显式映射（工程增强，非必须）。
+
+| 旧 id（2026-09-15 版） | 处置 | 新 id | 说明 |
+|---|---|---|---|
+| form / staple / noodle-soup / rice-bowl / filled / noodle-dry / meat / meat-grill / light | 保留 | 同名 | noodle-dry、meat、staple 仅改显示名 |
+| noodle-soup（tags） | 微调 | 同名 | tags 增 `米粉`（粉类归属） |
+| noodle-beef | 改名 | noodle-rich | 语义扩为「浇头豪横」 |
+| noodle-light | 改名 | noodle-clear | |
+| noodle-zhajiang | 改名 | dry-hot | 前缀统一 dry- |
+| noodle-liang | 改名 | dry-cold | 同上 |
+| rice-meat / rice-light | 保留 | 同名 | rice-meat 吸收异国荤饭（菜级 tag 表达风味） |
+| meat-stew | 改名 | meat-braise | |
+| stew-pork / stew-chicken / stew-beef | 保留 | 同名 | 挂 meat-braise 下不变 |
+| grill-pork-beef | 改名 | grill-beef-pork | 语序统一 |
+| meat-rice | **合并** | rice-bowl（历史推荐归 rice-meat） | 兄弟跨类消除（§3.1 笔记） |
+| light-meat / light-veg | 改名 | cold-meat / cold-veg | 前缀统一 cold-（同系还有 salad/snack/dimsum） |
+| — | 新增 L1 | pot | 汤锅烫煮系整支 |
+| — | 新增 L2 | meat-stir / meat-fish / pot-soup / pot-tang / pot-congee / light-salad / light-snack / light-dimsum | |
+| — | 新增 L3 | noodle-sour-spicy / rice-fried / filled-boil / filled-fry / filled-steam / dry-wrap / stir-rice / stir-soft / grill-fish / fish-suancai / fish-tomato / fish-boil / soup-meat / soup-fish-tofu / soup-veg / tang-malatang / tang-chuan / tang-hotpot / congee-meat / congee-plain / salad-poke / salad-sandwich / snack-fried / snack-lu / snack-skewer / dimsum-canopy / dimsum-rice-noodle | 全部 optional_children |
+
+映射落地形态建议：`LEGACY_DIM_MAP = {"noodle-beef": "noodle-rich", ..., "meat-rice": "rice-meat"}`，`build_state` 在 `find_node(dim)` 失败时先查映射再落启发——旧会话状态重建零精度损失。

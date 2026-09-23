@@ -81,6 +81,20 @@ async function bootstrapIdentity() {
   return body;
 }
 
+/* 换片计数渲染（P0-1）：剩 n 递减，耗尽打烊 */
+function renderSwapCounter(left) {
+  const btn = $("btn-again");
+  if (!btn) return;
+  if (typeof left === "number" && left > 0) {
+    btn.disabled = false;
+    btn.textContent = "换一个（剩 " + left + "）";
+  } else if (left === 0) {
+    btn.disabled = true;
+    btn.textContent = "换一个（今天用完了）";
+  }
+  $("btn-accept") && ($("btn-accept").disabled = false);
+}
+
 /* 兜底：任何 API 异常都回到开始屏并提示，禁止静默白屏（真机事故 2026-09-15） */
 function quizFail(msg) {
   ["screen-quiz", "screen-wait", "screen-result"].forEach((id) => hide($(id)));
@@ -101,7 +115,7 @@ function show(el) { el && el.classList.remove("hidden"); }
 function hide(el) { el && el.classList.add("hidden"); }
 
 /* ================= 主页：选餐流程 ================= */
-const Quiz = { sid: null, lastQ: null, fromLocal: false };
+const Quiz = { sid: null, lastQ: null, fromLocal: false, picked: false };
 
 /* ---------- 回访卡（FR-16/18；被记得的闭环，服务端 ≤1 次/人/周频控） ---------- */
 function renderVisit(vp) {
@@ -119,6 +133,10 @@ function renderVisit(vp) {
       $("visit-done").textContent = b.dataset.v === "unsatisfied" ?
         "记住了，下次绕开它。" : "好嘞，这类给你记上。";
       $("visit-done").classList.remove("hidden");
+      setTimeout(() => {                   /* P1-4：确认语可见 3s 后再撤卡 */
+        const card = $("visit-card");
+        if (card) card.classList.add("hidden");
+      }, 3000);
       track("visit_answer", { v: b.dataset.v, dish_slug: vp.dish_name });
     } catch (e) {
       box.classList.add("hidden");                 // 429＝本周已答，静默收起
@@ -164,6 +182,7 @@ async function askNext() {
   if (!Array.isArray(body.options) || !body.options.length) { quizFail(); return; }
   hide($("screen-wait"));
   Quiz.lastQ = body;
+  Quiz.picked = false;                     // P2：新题解锁点选锁
   renderQuestion(body);
   show($("screen-quiz"));
 }
@@ -189,7 +208,9 @@ function renderQuestion(q) {
 }
 
 async function pickOption(opt, btn) {
-  // 选中反馈：60ms 硬填充直切（CSS .flash-card[aria-pressed]）
+  // P2 修复：点选锁（双击双写防御——首点即锁全卡组）
+  if (Quiz.picked) return;
+  Quiz.picked = true;
   btn.setAttribute("aria-pressed", "true");
   $("quiz-cards").classList.add("out");
   await api(`/api/quiz/${Quiz.sid}/answer`, {
@@ -220,6 +241,7 @@ function showResult(r) {
   show($("screen-result"));
   Quiz.dish_slug = r.dish_slug || "";
   const acc = $("btn-accept"); if (acc) acc.disabled = false;
+  renderSwapCounter(r.swaps_left);
   $("dish-name").textContent = r.name;          // aria-live=assertive → 屏幕阅读器播报
   $("dish-reason").textContent = r.reason || "";
   $("dish-tags").textContent = (r.tags || []).join(" · ");
@@ -243,8 +265,34 @@ document.addEventListener("DOMContentLoaded", async () => {
   // --- 主页 ---
   if ($("btn-start")) $("btn-start").onclick = startQuiz;
   if ($("btn-quit")) $("btn-quit").onclick = () => location.reload();
+  // 换一＝灯箱换片（P0-1 设计评审 2026-09-23）：不重答、留结果屏、剩 n 计数
   if ($("btn-again")) $("btn-again").onclick = async () => {
-    hide($("screen-result")); await startQuiz();
+    const btn = $("btn-again");
+    if (btn.disabled) return;
+    btn.disabled = true; btn.textContent = "换片中…";
+    const { status, body } = await api(`/api/quiz/${Quiz.sid}/swap`, { method: "POST" });
+    if (status === 409) {                       // 耗尽：打烊态（服务端已留痕）
+      btn.textContent = "今天的换一次数用完了";
+      const h = $("swap-hint");
+      if (h) h.textContent = "就吃这个吧，明天再来翻牌。";
+      return;
+    }
+    if (status !== 200) {
+      btn.disabled = false; btn.textContent = "换一个";
+      const hint = $("taste-hint");
+      if (hint) hint.textContent = "换片开小差了，再点一次试试";
+      return;
+    }
+    show($("screen-wait"));
+    hide($("screen-result"));
+    const fin = await api(`/api/quiz/${Quiz.sid}/finalize`, { method: "POST" });
+    hide($("screen-wait"));
+    if (fin.status === 200 && fin.body.name) {
+      showResult(fin.body);
+      renderSwapCounter(fin.body.swaps_left);
+    } else {
+      quizFail(); return;
+    }
   };
   // 确认推荐（2026-09-16 owner 拍板去除第三方外卖跳转）：accept 事件保留＝
   // 「用户确认了这道推荐」信号（味觉记忆＋北极星口径变更见迭代日志）；
@@ -256,7 +304,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       method: "POST", body: JSON.stringify({ dish_slug: Quiz.dish_slug || "" }),
     });
     if (status === 200) {
-      btn.textContent = "已记下 ✓";
+      btn.textContent = "已记下 ✓（去「味觉记忆」打分，下次更准）";
       const hint = $("taste-hint");
       if (hint) hint.textContent = "去「味觉记忆」打分，下次推荐更准";
     } else {
@@ -314,11 +362,16 @@ async function initIdentityPage() {
     $("clear-hint").textContent = "已清空";
   };
 
-  // 主题三键
+  // 主题三键（P1-5：选中态 aria-pressed 回显）
   const set = (mode, btn) => {
     localStorage.setItem("wte_theme_mode", mode);
     document.body.dataset.theme = resolvedTheme(mode);
+    ["theme-auto", "theme-day", "theme-night"].forEach((id) => {
+      const b = $(id);
+      if (b) b.setAttribute("aria-pressed", String(b === btn));
+    });
   };
+  set(localStorage.getItem("wte_theme_mode") || "auto", $("theme-auto"));
   $("theme-auto").onclick = () => set("auto", $("theme-auto"));
   $("theme-day").onclick = () => set("day", $("theme-day"));
   $("theme-night").onclick = () => set("night", $("theme-night"));

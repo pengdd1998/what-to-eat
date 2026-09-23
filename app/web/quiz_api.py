@@ -70,6 +70,10 @@ def quiz_finalize(sid: int, request: Request):
     if not s:
         return _err(404, "no_session", "会话不存在")
     r = quiz_engine.finalize(sid, aid, client_ip=_client_ip(request))
+    s = _quiz_session_row(sid, aid)          # 换片剩余计数（P0-1）透传
+    if s is not None:
+        limits = db.get_config("swap_limits", {"cold": 3, "steady": 2})
+        r["swaps_left"] = max(0, int(limits.get("steady", 2)) - (s["swap_count"] or 0))
     # slug 保留中文（修复事故 2026-09-15：旧算法只留 [a-z0-9]，中文菜名全滤成 "dish"，
     # 深链 keyword 失义）——quiz 菜名不在 dish_library/pool 时，中文 slug 即搜索词
     dish_slug = re.sub(r"[^a-z0-9\u4e00-\u9fff]+", "-", r["name"].lower()).strip("-")[:64] or "dish"
@@ -109,6 +113,29 @@ def quiz_accept(sid: int, request: Request, body: dict):
                   (now_iso(), sess_id))
     umami.forward_async()
     return {"go_token": jump.make_token(sess_id, dish_slug)}
+
+
+@router.post("/api/quiz/{sid}/swap")
+def quiz_swap(sid: int, request: Request):
+    """换一（灯箱换片，P0-1）：校验属主→引擎 swap→前端重 finalize。"""
+    aid = _client_id(request)
+    s = _quiz_session_row(sid, aid)
+    if not s:
+        return _err(404, "no_session", "会话不存在")
+    limits = db.get_config("swap_limits", {"cold": 3, "steady": 2})
+    # 简化取 max（画像充分判冷/稳态在收口时已用步数体现；口径记录于迭代日志）
+    max_swaps = int(limits.get("steady", 2))
+    try:
+        out = quiz_engine.swap(sid, aid, max_swaps)
+    except ValueError as e:
+        return _err(409, str(e), "当前状态不可换一")
+    if out.get("exhausted"):
+        with db.tx() as t:
+            _quiz_write_event(t, anon_id=aid, session_id=f"sess_quiz_{sid}",
+                              type_="swap_exhausted", payload={"nth": max_swaps})
+        return _err(409, "swap_limit_reached", "换一次数已用完，今天就吃这个吧")
+    umami.forward_async()
+    return out
 
 
 @router.get("/api/memory")

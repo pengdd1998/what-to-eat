@@ -76,8 +76,9 @@
       <button id="btn-accept" class="primary big">就吃这个，记下来</button>
     </div>
     <div class="row">
-      <button id="btn-again" class="linklike">再帮我想一个</button>
+      <button id="btn-again" class="ghost">换一个</button>
     </div>
+    <p id="swap-hint" class="hint" role="status"></p>
     <div class="row">
       <a class="ghost" href="/memory" style="text-decoration:none;align-items:center;justify-content:center;display:flex">去记一下我喜不喜欢它</a>
     </div>
@@ -86,5 +87,5 @@
 
 {% endblock %}
 {% block scripts %}
-<script src="/static/app.js?v={{ version }}h"></script>
+<script src="/static/app.js?v={{ version }}j"></script>
 {% endblock %}

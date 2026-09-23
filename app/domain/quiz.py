@@ -668,6 +668,35 @@ def finalize(sid: int, anon_id: str, client_ip: str = "") -> dict:
     return {"cached": False, **result}
 
 
+def swap(sid: int, anon_id: str, max_swaps: int) -> dict:
+    """灯箱换片（P0-1）：结果屏内重收口——不重答、一次点击、剩 n 计数。
+
+    语义：清固化 result＋state 回 answering 允许 finalize 重收（出题 LLM 带
+    「换一个方向」注入）；swap_count 递增；FR-15 留 swap 事件（含次序）；
+    超上限 409＋swap_exhausted 留痕（不随 409 回滚——旧链纪律）。
+    """
+    session = get_session(sid, anon_id)
+    if session["state"] != "done":
+        raise ValueError("not_finalized")
+    used = session["swap_count"] or 0
+    if used >= max_swaps:
+        return {"exhausted": True, "swaps_left": 0}
+    with db.tx() as t:
+        t.execute(
+            "UPDATE quiz_session SET result=NULL, state='answering', "
+            "swap_count=swap_count+1, updated_at=? WHERE id=? AND anon_id=?",
+            (_now(), sid, anon_id))
+        t.execute(
+            "INSERT INTO events(client_event_id,session_id,anon_id,type,step,"
+            "payload,client_ts,server_ts) VALUES(?,?,?,?,?,?,?,?)",
+            ("ev_swap_" + secrets.token_hex(8), f"sess_quiz_{sid}", anon_id,
+             "swap", used + 1,
+             json.dumps({"nth": used + 1, "max": max_swaps}, ensure_ascii=False),
+             None, _now()))
+    # 清旧推荐记录的 accept 语义不回滚——recommendation 表按次留行，最新行为准
+    return {"exhausted": False, "swaps_left": max_swaps - used - 1}
+
+
 def feedback_recommendation(rec_id: int, anon_id: str, score: int) -> None:
     """三选反馈：对味+1 / 一般0 / 不推荐-1。落库即味觉记忆。"""
     if score not in (1, 0, -1):

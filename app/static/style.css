@@ -21,7 +21,9 @@
 [data-theme="day"]{
   --bg-0:#F4E9D6;--bg-1:#FFF8EC;--bg-2:#FBEFD9;--bg-3:#F3E2C4;
   --ink-1:#3A2C1A;--ink-2:#7A6647;--ink-3:#A8946F;
-  --y:#E8862E;--y-ink:#FFF8EC;--r:#C0492B;--c:#2E8A86;
+  --y:#E8862E;--y-ink:#231108;--r:#C0492B;--c:#2E8A86;
+  /* P0-2 修复（设计评审 2026-09-23）：day 主钮 2.52:1 不达 AA——浅墨字 #FFF8EC
+     改深墨 #231108（4.82:1 ✓），全 token 矩阵见测试 test_wcag_contrast */
   --line:#E4D3B3;--focus:#2E8A86;--sticker-bd:#E8862E;
   --shadow-pop:0 4px 0 rgba(120,90,40,.25);
   --shadow-press:0 1px 0 rgba(120,90,40,.25);
@@ -93,9 +95,10 @@ header h1{margin:8px 0 0;font-size:22px;font-weight:900;letter-spacing:.02em}
 .disclaimer{color:var(--ink-2);font-size:11px}
 .links a{color:var(--ink-2);font-size:13px}
 footer{margin-top:16px}
-.disclaimer{font-size:11px;color:var(--dim);margin:0}
+.disclaimer{font-size:11px;color:var(--ink-2);margin:0}
 code{background:#000;padding:8px 10px;border-radius:8px;font-size:12px;
-  word-break:break-all;flex:1}
+  overflow-wrap:anywhere;flex:1;min-width:0}
+  /* P1-3 修复（设计评审实机发现）：break-all 使 32 字符代号竖排成柱撑破卡片 */
 input{background:#000;border:1px solid #333;color:var(--ink-1);border-radius:10px;
   padding:12px;flex:1;font-size:16px}
 label{font-size:13px;color:var(--ink-2);display:block;margin:10px 0 4px}
@@ -134,7 +137,7 @@ label{font-size:13px;color:var(--ink-2);display:block;margin:10px 0 4px}
   transition:transform var(--t-press),background-color var(--t-lit),
     color var(--t-lit),border-color var(--t-lit);
   animation:pop 260ms cubic-bezier(.2,.7,.3,1.18) both,
-    float 2.8s ease-in-out infinite;
+    float 2.8s ease-in-out 1;   /* P2 修复：无限浮动→一次性入场（自动化/辅助技术 not-stable 阻塞＋耗电） */
   animation-delay:calc(var(--i,0)*40ms), calc(500ms + var(--i,0)*-350ms)}
 @keyframes pop{0%{opacity:0;transform:translateY(18px) scale(.85)}
   65%{opacity:1;transform:translateY(-4px) scale(1.04)}
@@ -225,3 +228,6 @@ label{font-size:13px;color:var(--ink-2);display:block;margin:10px 0 4px}
 .optbox.picked{border-color:var(--y);background:var(--y);color:var(--y-ink);
   font-weight:700}
 .optbox.picked .opt-dot{color:var(--y-ink)}
+
+.theme-pick[aria-pressed="true"]{border-color:var(--y);color:var(--ink-1);font-weight:700}
+.theme-pick[aria-pressed="false"]{opacity:.7}

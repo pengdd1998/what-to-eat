@@ -43,9 +43,9 @@
 <section class="card">
   <p class="kicker">主题</p>
   <div class="row">
-    <button id="theme-auto" class="ghost">跟随时钟（默认）</button>
-    <button id="theme-day" class="ghost">奶油暖色</button>
-    <button id="theme-night" class="ghost">暗夜暖灯</button>
+    <button class="theme-pick" id="theme-auto" class="ghost">跟随时钟（默认）</button>
+    <button class="theme-pick" id="theme-day" class="ghost">奶油暖色</button>
+    <button class="theme-pick" id="theme-night" class="ghost">暗夜暖灯</button>
   </div>
 </section>
 
@@ -61,5 +61,5 @@
 
 {% endblock %}
 {% block scripts %}
-<script src="/static/app.js?v={{ version }}h"></script>
+<script src="/static/app.js?v={{ version }}j"></script>
 {% endblock %}
