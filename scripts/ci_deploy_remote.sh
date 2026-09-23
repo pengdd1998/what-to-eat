@@ -6,7 +6,9 @@ set -euo pipefail
 # 多行 PEM 须落临时文件（内联 -i 会把后续行当参数）
 KEY_FILE=$(mktemp); printf '%s\n' "$VPS_SSH_KEY" > "$KEY_FILE"; chmod 600 "$KEY_FILE"
 CM_DIR=$(mktemp -d)
-trap 'rm -f "$KEY_FILE"; ssh -o ControlPath=$CM_DIR/cm -O exit $VPS_USER@$VPS_HOST >/dev/null 2>&1; rm -rf "$CM_DIR"' EXIT
+# P3 修复（评审 F1）：trap 各段容错——ssh -O exit 失败（master 已消失）不得
+# 跳过后续 rm -rf（/tmp 泄漏）且不得以非零退出码覆写部署真实结果
+trap 'rm -f "$KEY_FILE"; ssh -o ControlPath=$CM_DIR/cm -O exit $VPS_USER@$VPS_HOST >/dev/null 2>&1 || true; rm -rf "$CM_DIR" || true' EXIT
 # ControlMaster 复用（2026-09-21 限流事故根治）：八步共享一条主连接，
 # 免每步独立握手——runner 高频部署曾触发 sshd 限流 kex reset
 CM_OPTS="-o ControlMaster=auto -o ControlPath=$CM_DIR/cm -o ControlPersist=120"

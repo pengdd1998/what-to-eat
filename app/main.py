@@ -87,7 +87,10 @@ async def rate_limit_mw(request: Request, call_next):
     path = request.url.path
     if path.startswith("/api/") and path != "/api/health":
         if not ratelimit.allow(f"ip:{ip}", 60, 60.0):       # 60 req/min/IP [假设]
-            try:                                            # P2-2：429 计数出口
+            # P5 修复（评审 R3）：同步 db.tx 移出事件循环（async 中间件内阻塞
+            # 写锁＝洪峰下放大）；线程化执行，失败不阻断拒绝响应
+            import asyncio as _aio
+            def _count_429():
                 from .core.util import now_iso as _ni
                 _d = _ni()[:10]
                 with db.tx() as _t:
@@ -101,6 +104,8 @@ async def rate_limit_mw(request: Request, call_next):
                         "ON CONFLICT(metric_date, metric) DO UPDATE SET "
                         "value=excluded.value",
                         (_d, int(_v)))
+            try:
+                await _aio.to_thread(_count_429)
             except Exception:
                 pass
             return _err(429, "rate_limited", "请求太频繁，稍后再试")

@@ -380,31 +380,36 @@ def llm_session_trace(request: Request, sid: int):
 def llm_ping(request: Request):
     require_token(request)
     from .llm.service import ping as _ping
+    if _ping_throttled():
+        return {"throttled": True}
+    return _ping()
+
+
+def _ping_throttled() -> bool:
+    """60s 节流（P2 修复：SSR 端点曾 or True 恒真零节流——ping 不落 llm_calls，
+    节流是唯一成本闸门）。读最近 llm_ping audit 时间戳。"""
     import time as _t
+    from datetime import datetime as _dt
     last = db.connect().execute(
         "SELECT ts FROM audit_log WHERE action='llm_ping' ORDER BY id DESC "
         "LIMIT 1").fetchone()
-    if last:                                   # 60s 节流（防连点）
-        from datetime import datetime as _dt
+    if last:
         try:
-            prev = _dt.fromisoformat(last["ts"]).timestamp()
+            if _t.time() - _dt.fromisoformat(last["ts"]).timestamp() < 60:
+                return True
         except ValueError:
-            prev = 0
-        if _t.time() - prev < 60:
-            return {"throttled": True}
-    return _ping()
+            pass
+    return False
 
 
 @admin_app.post("/admin/llm/ping")
 def llm_ping_ssr(request: Request):
     require_basic(request)
     from .llm.service import ping as _ping
-    import time as _t
-    last = db.connect().execute(
-        "SELECT ts FROM audit_log WHERE action='llm_ping' ORDER BY id DESC "
-        "LIMIT 1").fetchone()
-    if not last or True:                        # SSR 版直接测（节流在 JSON 版）
-        _ping()
+    if _ping_throttled():                       # 节流期内不重测，静默回看板
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse("/admin/llm", status_code=303)
+    _ping()
     from fastapi.responses import RedirectResponse
     return RedirectResponse("/admin/llm", status_code=303)
 

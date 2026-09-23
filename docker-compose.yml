@@ -43,7 +43,9 @@ services:
 
   admin:
     # 内网面（§4.1 评审 8）：与公共面物理分离，仅宿主机回环可达（SSH 隧道访问）；
-    # 公网 /api/admin 403 已由 caddy edge 落地（第三层）。ADMIN_TOKEN 必须注入。
+    # 公网入口＝平台 edge-caddy（edge-net）＋仓库 edge（default 网）双通道；admin 仅回环。
+    # --forwarded-allow-ips=* 的安全前提已变：edge-net 全体成员可直连 wt-api（评审 09-21）。
+    # ADMIN_TOKEN 必须注入。
     build:
       context: .
       args:

@@ -158,6 +158,8 @@ def call(agent: str, task: str, prompt: str, *, model: str,
                     else {"thinking": {"type": "disabled"}})
     else:
         no_think = {}
+    if params.get("max_tokens"):               # P4（评审 F3）：ping 等诊断调用限长
+        no_think = {**no_think, "max_tokens": int(params["max_tokens"])}
     body = json.dumps({
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
