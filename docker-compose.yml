@@ -88,10 +88,35 @@ services:
       - api
     restart: unless-stopped
 
+  # Umami 自部署（T1.6 游标重放双写的接收端；孤儿容器归队 2026-09-23）：
+  # profiles [obs]——CD 只 up api/admin 不触碰；管理/升级时 --profile obs 显式操作
+  umami:
+    image: mirror.ccs.tencentyun.com/umamisoftware/umami:postgresql-latest
+    profiles: [obs]
+    environment:
+      DATABASE_URL: postgresql://umami:${UMAMI_DB_PW:-}@umami-db:5432/umami
+      DATABASE_TYPE: postgresql
+      # APP_SECRET/HASH_SALT 注入自 .env（UMAMI_ADMIN_PW 同存；密钥禁入 git）
+      APP_SECRET: ${UMAMI_APP_SECRET:-}
+      HASH_SALT: ${UMAMI_HASH_SALT:-}
+    depends_on: [umami-db]
+    restart: unless-stopped
+  umami-db:
+    image: postgres:15-alpine
+    profiles: [obs]
+    environment:
+      POSTGRES_DB: umami
+      POSTGRES_USER: umami
+      POSTGRES_PASSWORD: ${UMAMI_DB_PW:-}
+    volumes:
+      - umami-db-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
 volumes:
   api-data:
   caddy-data:
   caddy-config:
+  umami-db-data:
 
 networks:
   edge-net:
