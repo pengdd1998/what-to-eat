@@ -122,9 +122,24 @@ label{font-size:13px;color:var(--ink-2);display:block;margin:10px 0 4px}
   font-weight:900;font-size:24px;line-height:1.35;margin:var(--s-2) 0}
 .q-center::before,.q-center::after{content:"";width:20px;height:4px;
   border-radius:2px;background:var(--y);flex:none}
-.bulbs{display:flex;gap:10px;justify-content:center}
-.bulb{width:12px;height:12px;border-radius:50%;border:2px solid var(--line)}
-.bulb.on{background:var(--y);border-color:var(--y)}
+/* 等待屏三灯泡：灯箱暖灯轮转（设计评审「三灯泡纯静态」→签名动效兑现；2D only
+   ——9/16 结果页 3D 合成层错位教训：全站动效保持 2D；reduced-motion 全局禁用已有） */
+.bulbs{display:flex;gap:14px;justify-content:center;padding:6px 0}
+.bulb{width:14px;height:14px;border-radius:50%;border:2px solid var(--line);
+  animation:bulb-glow 1.8s ease-in-out infinite}
+.bulb:nth-child(1){animation-delay:0s}
+.bulb:nth-child(2){animation-delay:.45s}
+.bulb:nth-child(3){animation-delay:.9s}
+.bulb.on{background:var(--y);border-color:var(--y);
+}
+@keyframes bulb-glow{
+  0%,100%{background:transparent;transform:translateY(0);border-color:var(--line)}
+  15%{background:var(--y);border-color:var(--y);transform:translateY(-4px)}
+  45%{background:transparent;border-color:var(--line);transform:translateY(0)}
+}
+/* 等待屏文案：呼吸副标（灯箱灯管微闪语义，同 2D 纪律） */
+#screen-wait .hint{animation:wait-breathe 2.6s ease-in-out infinite}
+@keyframes wait-breathe{0%,100%{opacity:.55}50%{opacity:1}}
 .flash-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s-3);
   width:100%;margin:var(--s-3) 0}
 .flash-grid.two{grid-template-columns:repeat(2,1fr)}
