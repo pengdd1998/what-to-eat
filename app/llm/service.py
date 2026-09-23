@@ -57,22 +57,25 @@ def _over_circuit(conn, cfg: dict) -> str:
 
 def log_call(conn, vendor: str, scene: str, latency_ms: int, cost: float,
              status: str, tokens=None, *, task=None, error_class=None,
-             attempts=None) -> None:
+             attempts=None, model=None) -> None:
     """llm_calls 写入（自带短事务；2026-09-16 升公共——batch 直连网关路径
     亦须落库，否则看板成本口径系统性低估）。
 
     W-1 重构后本函数可能在**不持有 db.tx** 的上下文被调用（推荐已出锁），
     必须自带事务满足 R-03；禁止在已持有 db.tx 的调用方使用（锁不可重入）。
-    task/error_class/attempts＝LLM 监控三列（0007，llm-monitoring-plan §3）。
+    task/error_class/attempts＝监控三列（0007）；model＝实际模型名（0008）。
+    P1 修复（评审 R1 实锤）：签名曾缺 model 形参而 generate/batch 调用点已传
+    → 周一批产 TypeError 崩溃、batch_runs 卡 running、model 列 0 写入。
     """
     with db.tx() as c:
         c.execute(
             "INSERT INTO llm_calls(ts,vendor,scene,latency_ms,tokens_in,tokens_out,"
-            "cost_usd,status,task,error_class,attempts) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+            "cost_usd,status,task,error_class,attempts,model) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
             (datetime.now(timezone.utc).isoformat(timespec="milliseconds"), vendor,
              scene, latency_ms, tokens[0] if tokens else None,
              tokens[1] if tokens else None, cost, status,
-             task, error_class, attempts))
+             task, error_class, attempts, model))
 
 
 def _resolve_cfg(conn) -> dict:
@@ -136,12 +139,12 @@ def complete(conn, prompt: str, *, scene: str = "adhoc", agent: str = "app",
     if not res["ok"]:
         log_call(conn, r["provider"], scene, res["latency_ms"], 0.0, "error",
                   task=_task, error_class=res.get("error_class"),
-                  attempts=res.get("attempts"))
+                  attempts=res.get("attempts"), model=model)
         return _fail("call_failed", res["latency_ms"], res.get("error_class"))
     log_call(conn, r["provider"], scene, res["latency_ms"],
               cfg.get("cost_per_call_usd", 0.01), "ok",
               tokens=(res["input_tokens"], res["output_tokens"]),
-              task=_task, attempts=res.get("attempts"))
+              task=_task, attempts=res.get("attempts"), model=model)
     return {"ok": True, "content": res["content"],
             "latency_ms": res["latency_ms"], "error_class": None, "reason": ""}
 

@@ -110,3 +110,17 @@ def test_circuit_break_notify_dedup():
     c = db.connect()
     assert c.execute("SELECT COUNT(*) FROM audit_log WHERE "
                      "action='llm_circuit_break'").fetchone()[0] == 2  # 审计不丢
+
+
+def test_log_call_model_column():
+    """P1 修复回归锚（评审 R1）：log_call 带 model 落 12 列——签名缺失曾致
+    generate/batch 调用点 TypeError、周一批产崩、model 列 0 写入。"""
+    from app.llm.service import log_call
+    log_call(None, "test-vendor", "cold_start", 123, 0.01, "ok",
+             tokens=(10, 20), task="next_question", attempts=1,
+             model="test-model-x")
+    c = db.connect()
+    row = c.execute(
+        "SELECT vendor, model, task FROM llm_calls ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    assert row["model"] == "test-model-x" and row["task"] == "next_question"
