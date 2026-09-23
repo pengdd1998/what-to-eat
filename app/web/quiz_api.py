@@ -91,7 +91,8 @@ def quiz_finalize(sid: int, request: Request):
     token = jump.make_token(sess_id, dish_slug)
     return {"name": r["name"], "reason": r.get("reason", ""),
             "tags": r.get("tags", []), "dish_slug": dish_slug,
-            "go_token": token}
+            "go_token": token,
+            "swaps_left": r.get("swaps_left")}   # P0-1 换片计数（前端 renderSwapCounter）
 
 
 @router.post("/api/quiz/{sid}/accept")
