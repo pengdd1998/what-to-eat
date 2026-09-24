@@ -194,9 +194,15 @@ def build_state(log):
                     dim = o["dim"]
                     break
         node = find_node(dim)
-        if node is None:                       # 无 dim 标注：按 tags 启发挂载
-            pure_ortho = tags & set(ORTHO_ALIASES)   # 纯正交语义词不进链（防截胡）
-            node = _guess_chain_node(tags - pure_ortho)
+        # F2 修复（真机 D 流程实证 2026-09-24）：dim 是已知正交维度＝本题测的
+        # 就是正交轴，其 tags（清淡/暖…）不再启发挂链——「清淡」曾误挂 pot-congee
+        # 把用户选的主食路径系统性改写成粥。仅 dim 完全缺失（旧会话）才启发。
+        if dim and dim not in [d["id"] for d in ORTHOGONAL]:
+            node = find_node(dim)              # 已在上面 find 过，此处冗余防误改
+        if node is None and (not dim or dim in [d["id"] for d in ORTHOGONAL]):
+            # 无任何 dim 信息（旧会话）→ 启发（纯正交词不进链防截胡）
+            pure_ortho = tags & set(ORTHO_ALIASES)
+            node = _guess_chain_node(tags - pure_ortho) if tags - pure_ortho else None
         if node:
             # 同支相容守卫（2026-09-16 重放 005 实证）：链非空时启发归类节点必须
             # 在链尾子树内（或为链尾祖先）——跨支启发结果跳过不入链，防链污染
@@ -347,6 +353,27 @@ def validate_question(out, state):
                 return False, f"ortho_mismatch:{d['id']}"
         else:
             node = find_node(dim)
+            # F3 修复（真机 A/C 实证 2/2）：兄弟互斥先行——选项 tags 命中兄弟
+            # 独有 tags 时拒绝（「干拌的（凉拌）」挂 noodle-soup＝跨支漂移）
+            if node and node.get("tags"):
+                dim_tags = set(node["tags"])
+                sibs = []
+                for l1 in CHAIN["children"]:
+                    branch_ids = {l1["id"]} | {c["id"] for c in
+                        l1.get("children", []) + l1.get("optional_children", [])}
+                    if dim in branch_ids:
+                        continue              # dim 所属支整体排除（含 dim 自身）
+                    sibs += l1.get("children", []) + l1.get("optional_children", [])
+                # 兄弟【独有】tags＝兄弟有而「dim 及其子树」完全没有的 tag
+                # （共享语义如「汤」在 noodle-rich 子树同样存在＝不算干拌信号）
+                own_tree_tags = set(dim_tags)
+                for sib in sibs:
+                    own_tree_tags |= set(sib.get("tags") or [])
+                sib_exclusive = set()
+                for sib in sibs:
+                    sib_exclusive |= set(sib.get("tags") or []) - own_tree_tags
+                if ts & sib_exclusive:
+                    return False, f"SiblingConflict:exclusive={sorted(ts & sib_exclusive)}"
             if node and node["tags"] and not (ts & set(node["tags"])):
                 # 允许 LLM 用子维度更细 tags：与父节点 tags 有交集即可，否则视为漂移
                 return False, f"chain_mismatch:{dim}"
