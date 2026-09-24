@@ -197,12 +197,11 @@ def build_state(log):
         # F2 修复（真机 D 流程实证 2026-09-24）：dim 是已知正交维度＝本题测的
         # 就是正交轴，其 tags（清淡/暖…）不再启发挂链——「清淡」曾误挂 pot-congee
         # 把用户选的主食路径系统性改写成粥。仅 dim 完全缺失（旧会话）才启发。
-        if dim and dim not in [d["id"] for d in ORTHOGONAL]:
-            node = find_node(dim)              # 已在上面 find 过，此处冗余防误改
-        if node is None and (not dim or dim in [d["id"] for d in ORTHOGONAL]):
-            # 无任何 dim 信息（旧会话）→ 启发（纯正交词不进链防截胡）
+        if node is None and not dim:
+            # 无任何 dim 信息（旧会话）→ 启发（纯正交语义词不进链防截胡）
             pure_ortho = tags & set(ORTHO_ALIASES)
-            node = _guess_chain_node(tags - pure_ortho) if tags - pure_ortho else None
+            rest = tags - pure_ortho
+            node = _guess_chain_node(rest) if rest else None
         if node:
             # 同支相容守卫（2026-09-16 重放 005 实证）：链非空时启发归类节点必须
             # 在链尾子树内（或为链尾祖先）——跨支启发结果跳过不入链，防链污染
