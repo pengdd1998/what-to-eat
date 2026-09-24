@@ -675,17 +675,31 @@ def swap(sid: int, anon_id: str, max_swaps: int) -> dict:
     「换一个方向」注入）；swap_count 递增；FR-15 留 swap 事件（含次序）；
     超上限 409＋swap_exhausted 留痕（不随 409 回滚——旧链纪律）。
     """
-    session = get_session(sid, anon_id)
-    if session["state"] != "done":
-        raise ValueError("not_finalized")
-    used = session["swap_count"] or 0
-    if used >= max_swaps:
-        return {"exhausted": True, "swaps_left": 0}
     with db.tx() as t:
-        t.execute(
+        # F1 修复（评审 2026-09-23 TOCTOU 实锤）：检查与递增同事务——UPDATE 带
+        # state='done' AND swap_count < max 双守卫按 rowcount 判定，并发双击
+        # 只有一个线程抢到位（原实现在 tx 外读 used → 交错更新＝超限绕过硬验收）
+        cur = t.execute(
             "UPDATE quiz_session SET result=NULL, state='answering', "
-            "swap_count=swap_count+1, updated_at=? WHERE id=? AND anon_id=?",
-            (_now(), sid, anon_id))
+            "swap_count=swap_count+1, updated_at=? "
+            "WHERE id=? AND anon_id=? AND state='done' "
+            "AND swap_count < ?",
+            (_now(), sid, anon_id, max_swaps))
+        if cur.rowcount == 0:
+            # 兼容态：state 已被并发首胜者改为 answering（非耗尽）→ 返回
+            # not_finalized 语义外第三态 exhausted=False exhausted=False 双 False
+            # 不可表达——返回 exhausted=True 会让前端误显示「用完」。
+            # 改为返回第三态 pending：前端静默忽略。
+            still = t.execute(
+                "SELECT state, swap_count FROM quiz_session WHERE id=?",
+                (sid,)).fetchone()
+            if still and still["state"] == "answering" and \
+                    (still["swap_count"] or 0) < max_swaps:
+                return {"exhausted": False, "swaps_left": max_swaps,
+                        "pending": True}
+            return {"exhausted": True, "swaps_left": 0}
+        used = (t.execute("SELECT swap_count FROM quiz_session WHERE id=?",
+                          (sid,)).fetchone()[0]) - 1
         t.execute(
             "INSERT INTO events(client_event_id,session_id,anon_id,type,step,"
             "payload,client_ts,server_ts) VALUES(?,?,?,?,?,?,?,?)",

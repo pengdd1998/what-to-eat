@@ -277,6 +277,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (h) h.textContent = "就吃这个吧，明天再来翻牌。";
       return;
     }
+    if (status === 200 && body.pending) {       // 并发败者：本轮已被处理，拉最新态
+      btn.disabled = false; btn.textContent = "换一个";
+      return;
+    }
     if (status !== 200) {
       btn.disabled = false; btn.textContent = "换一个";
       const hint = $("taste-hint");

@@ -128,8 +128,13 @@ def quiz_swap(sid: int, request: Request):
     max_swaps = int(limits.get("steady", 2))
     try:
         out = quiz_engine.swap(sid, aid, max_swaps)
-    except ValueError as e:
-        return _err(409, str(e), "当前状态不可换一")
+    except ValueError:
+        # F2 修复（评审）：409 双语义拆分——not_finalized 与耗尽不同 message，
+        # 前端不再把并发冲突误显示为「次数用完」
+        return _err(409, "not_finalized", "这轮还没出结果，先等收口")
+    if out.get("pending"):
+        # 并发败者：另一请求已完成本轮换片（非耗尽）——静默 200 让前端拉最新态
+        return out
     if out.get("exhausted"):
         with db.tx() as t:
             _quiz_write_event(t, anon_id=aid, session_id=f"sess_quiz_{sid}",
