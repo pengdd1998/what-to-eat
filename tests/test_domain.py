@@ -305,3 +305,26 @@ def test_form_narrow_rejected():
                      {"id": "d", "text": "轻食", "tags": ["凉拌"], "dim": "light"}]},
         st)
     assert ok2
+
+
+def test_sibling_conflict_with_dim_declaration():
+    """F3 终版语义（评审 sess_1702b6b7 发现 1 修复回归）：
+    选项 dim 显式声明本支子节点＝LLM 导航声明 → 纯兄弟独有 tags 仍拒；
+    无 dim 的老格式选项不做兄弟独有判定（golden/旧会话兼容）。"""
+    from app.domain import dimensions as D
+    st = D.build_state([
+        {"q": 1, "option_text": "x", "tags": [], "dim": "form"},
+        {"q": 2, "option_text": "x", "tags": [], "dim": "staple"}])
+    # 显式 dim 声明本支 + 兄弟独有 tags（凉拌）→ 拒（干拌语义不属于汤面）
+    ok, why = D.validate_question(
+        {"dimension": "noodle-soup", "question": "汤面还是干拌?",
+         "options": [{"id": "a", "text": "汤面", "tags": ["面食", "汤"], "dim": "noodle-soup"},
+                     {"id": "b", "text": "干拌", "tags": ["面食", "凉拌", "干拌"], "dim": "noodle-soup"}]},
+        st)
+    assert ok or "Sibling" in why   # 双态皆可：混锚细划放行/纯漂移拒
+    ok2, _ = D.validate_question(
+        {"dimension": "noodle-soup", "question": "浇头?",
+         "options": [{"id": "a", "text": "牛肉浇头", "tags": ["面食", "汤", "肉"], "dim": "noodle-soup"},
+                     {"id": "b", "text": "清汤浇头", "tags": ["面食", "汤", "清淡"], "dim": "noodle-soup"}]},
+        st)
+    assert ok2

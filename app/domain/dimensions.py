@@ -363,16 +363,23 @@ def validate_question(out, state):
                     if dim in branch_ids:
                         continue              # dim 所属支整体排除（含 dim 自身）
                     sibs += l1.get("children", []) + l1.get("optional_children", [])
-                # 兄弟【独有】tags＝兄弟有而「dim 及其子树」完全没有的 tag
-                # （共享语义如「汤」在 noodle-rich 子树同样存在＝不算干拌信号）
-                own_tree_tags = set(dim_tags)
-                for sib in sibs:
-                    own_tree_tags |= set(sib.get("tags") or [])
+                # 兄弟【独有】tags＝兄弟有而「dim 自身」没有的 tag。
+                # 修正（评审 sess_1702b6b7 发现 1 实锤）：原实现把兄弟 tags 并入
+                # own_tree_tags → sib_exclusive 恒空集、互斥校验恒放行。
+                # 共享语义豁免只认 dim 自身 tags（如 noodle-soup 的「汤」）——
+                # 子树 tag 豁免会让「凉拌/干拌」借 noodle-rich 的「肉」漏网。
+                own_only = set(dim_tags)
                 sib_exclusive = set()
                 for sib in sibs:
-                    sib_exclusive |= set(sib.get("tags") or []) - own_tree_tags
-                if ts & sib_exclusive:
-                    return False, f"SiblingConflict:exclusive={sorted(ts & sib_exclusive)}"
+                    sib_exclusive |= set(sib.get("tags") or []) - own_only
+                for o in opts:
+                    ots = set(o.get("tags") or [])
+                    cross = ots & sib_exclusive
+                    o_dim_node = (find_node(str(o["dim"])) if o.get("dim") else None)
+                    # 豁免：选项 dim 声明本支子级（细划）或无 dim（老格式）→ 不拒；
+                    # dim 指向兄弟支节点＝LLM 导航声明错误 → 拒
+                    if cross and o_dim_node and o_dim_node["id"] != dim:
+                        return False, f"SiblingConflict:exclusive={sorted(cross)}"
             if node and node["tags"] and not (ts & set(node["tags"])):
                 # 允许 LLM 用子维度更细 tags：与父节点 tags 有交集即可，否则视为漂移
                 return False, f"chain_mismatch:{dim}"
