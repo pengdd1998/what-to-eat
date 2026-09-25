@@ -495,9 +495,11 @@ def next_question(session, client_ip: str = "") -> dict:
         else:
             qtext = str(data.get("question", ""))
             if (_health_clean(qtext) or _is_side_dish_question(qtext)):
-                data = None                      # 搭配/健康：出题即废，走本地兜底
+                # 置 None 前先取 dim（自伤教训 2026-09-25：打点放在置空后
+                # ＝None.get → /next 500，会话 137/139 实证）
                 _reject_trace("health_or_side_dish",
                               str(data.get("dimension", "")), step)
+                data = None                      # 搭配/健康：出题即废，走本地兜底
             else:
                 ok_v, norm = dimensions.validate_question(data, state)
                 if not ok_v:

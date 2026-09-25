@@ -553,3 +553,26 @@ def test_next_question_reject_trace(monkeypatch):
         "SELECT detail FROM audit_log WHERE action='quiz_q_reject' "
         "ORDER BY id DESC LIMIT 1").fetchone()
     assert row2 and "parse_fail" in row2["detail"]
+
+
+def test_next_question_health_reject_no_crash(monkeypatch):
+    """自伤回归锚（2026-09-25 生产 /next 500 实证）：搭配/健康拦截路径打点
+    曾在 data 置 None 之后取 data.get ＝ AttributeError → 500。修复后该路径
+    正常走本地兜底且拒因留痕 health_or_side_dish。"""
+    from app.core import db as _db
+    anon = "pytest-f5b"
+    s = quiz.create_session(anon)
+
+    def _side_dish(conn, prompt, **kw):
+        return {"ok": True, "content":
+                '{"dimension":"spice","question":"烤串配点啥饮料？","options":'
+                '[{"id":"a","text":"冰可乐","tags":["不辣"]},'
+                '{"id":"b","text":"热茶","tags":["不辣"]}]}'}   # 搭配题→拦截
+
+    monkeypatch.setattr(quiz.llm, "complete", _side_dish)
+    q = quiz.next_question(quiz.get_session(s["id"], anon))   # 修复前此处 500
+    assert q["source"] == "local"
+    row = _db.connect().execute(
+        "SELECT detail FROM audit_log WHERE action='quiz_q_reject' "
+        "ORDER BY id DESC LIMIT 1").fetchone()
+    assert row and "health_or_side_dish" in row["detail"]
