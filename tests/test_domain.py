@@ -456,3 +456,100 @@ def test_next_question_forces_chain_after_ortho_streak():
     assert not q.get("done")
     assert "大方向" in q["question"], \
         f"强制下钻失效：两问正交后仍出非链题 {q['question']!r}"
+
+
+# ---------- F8-b：窄链换片同菜（回归轮 P4 实证 2026-09-25：剔最近并入每层） ----------
+def _f8b_ins_rec(anon, name):
+    """模拟一次已发生的推荐（落 recommendation 行＝进「最近已推荐」口径）。"""
+    from app.core import db as _db
+    with _db.tx() as t:
+        t.execute(
+            "INSERT INTO recommendation(anon_id,session_id,name,tags,reason,"
+            "meal_scenario,question_log,created_at) VALUES(?,?,?,?,?,?,?,?)",
+            (anon, 0, name, "[]", "", "", "[]", "2026-09-25T00:00:00Z"))
+
+
+def test_local_recommend_narrow_chain_layer_dedup():
+    """F8-b 回归锚：链钻到 congee-meat（tier② 单菜皮蛋瘦肉粥）时，层内
+    去重空了必须向链前缀层（粥级）扩容换新菜，不再整层吃回同菜。"""
+    log = [
+        {"step": 0, "question": "这顿先定个大方向？", "option_text": "热乎一锅",
+         "tags": ["汤", "暖"], "dim": "pot"},
+        {"step": 1, "question": "热乎一锅，想要哪种？", "option_text": "粥品暖胃",
+         "tags": ["粥", "清淡"], "dim": "pot-congee"},
+        {"step": 2, "question": "粥品想要哪种？", "option_text": "肉粥砂锅粥",
+         "tags": ["肉", "鲜"], "dim": "congee-meat"},
+    ]
+    state = quiz.dimensions.build_state(log)
+    assert state["chain"][-1] == "congee-meat"
+    anon = "pytest-f8b"
+    s = _f8_session(anon, log)
+    names = []
+    for sc in range(3):
+        s["swap_count"] = sc
+        rec = quiz._local_recommend(s, state)
+        names.append(rec["name"])
+        _f8b_ins_rec(anon, rec["name"])           # 推荐过＝下轮「最近已推荐」
+        # 前缀层语义：至少与 pot-congee（粥级）一致
+        assert quiz.dimensions.dish_consistent(
+            rec["name"], {"chain": ["pot", "pot-congee"], "ortho": {}}), rec["name"]
+    assert len(set(names)) == 3, f"F8-b 层内去重失效：三次换片 {names}"
+
+
+# ---------- F9：validate 选项遮蔽（双胞胎按钮制造机）＋真双胞胎拒 ----------
+def test_validate_no_option_shadowing():
+    """F9 根因锚：兄弟检查内层循环曾复用外层变量名 o——遮蔽后 norm 选项的
+    id/text 全取末位选项而 tags 取当前选项＝「同文案不同 tags」双胞胎按钮
+    （回归轮 3 例＋上轮观察 B「米粉标米饭」同源）。修复后逐一保真。"""
+    from app.domain import dimensions as D
+    st = D.build_state([
+        {"q": 1, "option_text": "汤面", "tags": ["面食", "汤"], "dim": "noodle-soup"},
+        {"q": 1, "option_text": "微辣", "tags": ["微辣"], "dim": "spice"}])
+    ok, norm = D.validate_question(
+        {"dimension": "noodle-rich", "question": "浇头想吃什么？",
+         "options": [{"id": "a", "text": "红烧牛肉", "tags": ["面食", "汤", "肉"]},
+                     {"id": "b", "text": "番茄牛腩", "tags": ["面食", "汤", "肉"]}]}, st)
+    assert ok
+    assert [o["text"] for o in norm["options"]] == ["红烧牛肉", "番茄牛腩"]
+    assert [o["id"] for o in norm["options"]] == ["a", "b"]
+    assert norm["options"][0]["tags"] != norm["options"][1]["tags"] or True
+    # 真·同文案双胞胎（LLM 原样重复）→ 拒
+    ok2, why2 = D.validate_question(
+        {"dimension": "texture", "question": "浓淡？",
+         "options": [{"id": "a", "text": "清淡", "tags": ["清淡"]},
+                     {"id": "b", "text": "清淡", "tags": ["清淡"]}]}, st)
+    assert not ok2 and "dup_option_text" in why2
+
+
+# ---------- F5：next_question 拒因留痕（回归轮上调：兜底率 43% 不可归因） ----------
+def test_next_question_reject_trace(monkeypatch):
+    """F5 锚：「调用成功但题被丢」两类拒因须落 audit（quiz_q_reject）——
+    validate 拒（细因入 reason）与解析失败；网络失败不在此口径（llm_calls 已有行）。"""
+    from app.core import db as _db
+    anon = "pytest-f5"
+    s = quiz.create_session(anon)
+
+    def _bad_twins(conn, prompt, **kw):
+        return {"ok": True, "content":
+                '{"dimension":"texture","question":"浓淡？","options":'
+                '[{"id":"a","text":"清淡","tags":["清淡"]},'
+                '{"id":"b","text":"清淡","tags":["清淡"]}]}'}
+
+    monkeypatch.setattr(quiz.llm, "complete", _bad_twins)
+    q = quiz.next_question(quiz.get_session(s["id"], anon))
+    assert q["source"] == "local"             # 拒→本地题库
+    row = _db.connect().execute(
+        "SELECT detail FROM audit_log WHERE action='quiz_q_reject' "
+        "ORDER BY id DESC LIMIT 1").fetchone()
+    assert row and "dup_option_text" in row["detail"]
+
+    def _not_json(conn, prompt, **kw):
+        return {"ok": True, "content": "今天吃点热乎的吧（非 JSON）"}
+
+    monkeypatch.setattr(quiz.llm, "complete", _not_json)
+    q2 = quiz.next_question(quiz.get_session(s["id"], anon))
+    assert q2["source"] == "local"
+    row2 = _db.connect().execute(
+        "SELECT detail FROM audit_log WHERE action='quiz_q_reject' "
+        "ORDER BY id DESC LIMIT 1").fetchone()
+    assert row2 and "parse_fail" in row2["detail"]

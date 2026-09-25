@@ -85,6 +85,19 @@ def cost_close() -> dict:
         os.path.getsize(db.DB_PATH + suf) for suf in ("", "-wal", "-shm")
         if os.path.exists(db.DB_PATH + suf))
     db_size_mb = round(db_bytes / 1048576, 1)
+    # F5（回归轮上调 2026-09-25）：出题拒因分布——「调用成功但题被丢」的
+    # 结构化归因（parse/搭配健康/validate 细因/强制下钻拒）；网络失败在
+    # llm_calls 已有 error 行，不在此口径。reason 取前两段聚合计数。
+    q_rej = {}
+    for r in conn.execute(
+            "SELECT detail FROM audit_log WHERE action='quiz_q_reject' "
+            "AND substr(ts,1,10)=?", (date,)):
+        try:
+            reason = json.loads(r["detail"]).get("reason", "?")
+        except (json.JSONDecodeError, TypeError):
+            reason = "?"
+        key = ":".join(str(reason).split(":")[:2])
+        q_rej[key] = q_rej.get(key, 0) + 1
     with db.tx() as t:
         _write_metric(t, date, "llm_calls", row["c"], row["c"])
         _write_metric(t, date, "llm_cost_usd", round(row["cost"], 4), row["c"])
@@ -102,6 +115,7 @@ def cost_close() -> dict:
         _write_metric(t, date, "quiz_question_llm_rate", q_llm_rate, q_steps)
         _write_metric(t, date, "quiz_finalize_local_rate", fin_local_rate,
                       fin_total)
+        _write_metric(t, date, "quiz_reject_reasons", q_rej, sum(q_rej.values()))
         _write_metric(t, date, "disk_pct", disk_pct, None)
         _write_metric(t, date, "db_size_mb", db_size_mb, None)
     # ===== 告警四条（plan §5.1，拍板 B 建议值起步）=====
@@ -112,7 +126,8 @@ def cost_close() -> dict:
     if success_rate is not None and row["c"] >= 20 and success_rate < 0.9:
         notify("LLM 成功率告警", f"{date} 成功率 {success_rate}（n={row['c']}）", "P2")
     if q_llm_rate is not None and q_steps >= 10 and q_llm_rate < 0.7:
-        notify("出题 LLM 占比走低", f"{date} llm_rate={q_llm_rate}（n={q_steps}）", "P2")
+        notify("出题 LLM 占比走低",
+               f"{date} llm_rate={q_llm_rate}（n={q_steps}）拒因={q_rej}", "P2")
     if fin_local_rate is not None and fin_total >= 10 and fin_local_rate > 0.3:
         notify("收口本地兜底率偏高", f"{date} local_rate={fin_local_rate} 拒因={fin_reasons}", "P2")
 
@@ -154,5 +169,6 @@ def cost_close() -> dict:
             "umami_lag": ev_total - cursor,
             "llm_success_rate": success_rate, "quiz_question_llm_rate": q_llm_rate,
             "quiz_finalize_local_rate": fin_local_rate,
+            "quiz_reject_reasons": q_rej,
             "disk_pct": disk_pct, "db_size_mb": db_size_mb,
             "app_500_count": app_500, "app_429_count": app_429}

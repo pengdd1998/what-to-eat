@@ -230,6 +230,8 @@ def main():
           "llm_success_rate" in cc and "quiz_question_llm_rate" in cc)
     check("cost_close 含 disk_pct/db_size_mb（监控 v2 P0-3）",
           "disk_pct" in cc and "db_size_mb" in cc)
+    check("cost_close 含 quiz_reject_reasons（F5 拒因归因，回归轮 2026-09-25）",
+          "quiz_reject_reasons" in cc)
     # 阶段3②教训入烟：crontab 走 `python -m app.cron`，包执行须有 __main__.py；
     # 遍历读任务（aggregate 在冒烟库已有数据→隐藏依赖漏 import 能被抓到）
     _cron_ok = True

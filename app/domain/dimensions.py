@@ -404,10 +404,14 @@ def validate_question(out, state):
                 sib_exclusive = set()
                 for sib in sibs:
                     sib_exclusive |= set(sib.get("tags") or []) - own_only
-                for o in opts:
-                    ots = set(o.get("tags") or [])
+                # F9 根因修复（回归轮 2026-09-25）：此内层循环曾复用外层变量名 o
+                # ——遮蔽后 norm 选项的 id/text 取自末位选项而 tags 取自当前选项
+                # ＝「同文案不同 tags」双胞胎按钮的制造机（自 F3 落地即存在；
+                # 上轮「米粉标米饭」观察 B 同源）。改独立名 so。
+                for so in opts:
+                    ots = set(so.get("tags") or [])
                     cross = ots & sib_exclusive
-                    o_dim_node = (find_node(str(o["dim"])) if o.get("dim") else None)
+                    o_dim_node = (find_node(str(so["dim"])) if so.get("dim") else None)
                     # 豁免：选项 dim 声明本支子级（细划）或无 dim（老格式）→ 不拒；
                     # dim 指向兄弟支节点＝LLM 导航声明错误 → 拒
                     if cross and o_dim_node and o_dim_node["id"] != dim:
@@ -417,6 +421,12 @@ def validate_question(out, state):
                 return False, f"chain_mismatch:{dim}"
         norm.append({"id": str(o.get("id", ""))[:24], "text": str(o["text"])[:20],
                      "tags": tags})
+    # F9 修复（回归轮 P1/P3 实证 2026-09-25）：同文案双胞胎选项拒——两个
+    # 按钮文字一模一样而 tags 互相矛盾（其一还带兄弟支 tag），用户等于少
+    # 一个选项且错标 tags 会污染链状态。拒→本地题库兜底。
+    texts = [o["text"] for o in norm]
+    if len(set(texts)) != len(texts):
+        return False, f"dup_option_text:{dim}"
     return True, {"dimension": dim, "question": str(out.get("question", ""))[:60],
                   "options": norm}
 
