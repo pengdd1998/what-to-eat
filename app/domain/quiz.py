@@ -413,11 +413,13 @@ def next_question(session, client_ip: str = "") -> dict:
     log = json.loads(session["question_log"] or "[]")
     step = session["step_index"]
     state = dimensions.build_state(log)
+    _minfb = 2     # form 分支下限（owner 拍板放宽 2026-09-25：3→2；config 可翻）
     try:
         _qcfg = db.get_config("quiz", {})
         min_required = (int(_qcfg.get("min_steps_profiled", 3))
                         if quiz_profiled(anon_id)
                         else int(_qcfg.get("min_steps", MIN_STEPS)))
+        _minfb = max(2, int(_qcfg.get("form_branch_min", 2)))
     except Exception:
         min_required = MIN_STEPS
     min_required = max(2, min(min_required, MAX_STEPS - 1))
@@ -479,8 +481,8 @@ def next_question(session, client_ip: str = "") -> dict:
         f"【可用维度集】{dims_json}\n"
         + ("这是第一步：请从【可用维度集】中**任选一个你认为最合适的维度**出题"
            "（形态/辣度/浓淡/蛋白/温度/节奏皆可，凭你的判断选当下最值得问的）。\n"
-           "若选 form（餐食形态）：给 3~4 个选项，各选项 tags 直接用所属大方向"
-           "词（主食/硬菜/汤锅/轻食），严禁二分法锁死用户选择。\n"
+           "若选 form（餐食形态）：尽量给 3~4 个选项覆盖多个大方向（至少 2 个），"
+           "各选项 tags 直接用所属大方向词（主食/硬菜/汤锅/轻食）。\n"
            if not state["chain"] else "")
         + ("" if not chain_only else
            "分类路径还没收拢——本题必须从 chain 类维度里选一个"
@@ -501,7 +503,8 @@ def next_question(session, client_ip: str = "") -> dict:
                               str(data.get("dimension", "")), step)
                 data = None                      # 搭配/健康：出题即废，走本地兜底
             else:
-                ok_v, norm = dimensions.validate_question(data, state)
+                ok_v, norm = dimensions.validate_question(data, state,
+                                                          min_form_branches=_minfb)
                 if not ok_v:
                     import sys as _sys
                     print(f"[WTE-DEBUG] validate 拒: {norm}"

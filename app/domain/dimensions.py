@@ -331,11 +331,14 @@ MAX_ASK_STEPS = 6     # 导航式出题的强制收口步数（漏斗后步数�
 
 
 # ---------- 验收器：LLM 出题合规 ----------
-def validate_question(out, state):
+def validate_question(out, state, min_form_branches=2):
     """校验 LLM 出题：返回 (True, 归一化题) 或 (False, 原因)。
 
     检查：dimension ∈ 可用集；选项 2~4 个且各带 tags；chain 维度选项与兄弟
-    独有 tags 无跨类；ortho 维度选项 tags 命中取值域。搭配/健康词由 quiz 层拦截。
+    独有 tags 无跨类；ortho 维度选项 tags 命中取值域；form 选项覆盖大方向
+    分支数 ≥ min_form_branches（owner 拍板放宽 2026-09-25：3→2——生产拒因
+    form_narrow:2 ×13＝43% 本地兜底主源；config quiz.form_branch_min 可翻回）。
+    搭配/健康词由 quiz 层拦截。
     """
     if not isinstance(out, dict):
         return False, "not_dict"
@@ -369,7 +372,10 @@ def validate_question(out, state):
                 if any(a in otext or a in otags for a in aliases):
                     covered.add(lid)
                     break
-        if len(opts) < 3 or len(covered) < 3:
+        # 分支下限 owner 拍板放宽（2026-09-25）：≥3 → ≥2（默认 2，可经
+        # config quiz.form_branch_min 翻回 3 无需改码）；选项数下限同步
+        _minfb = max(2, int(min_form_branches or 2))
+        if len(opts) < _minfb or len(covered) < _minfb:
             return False, f"form_narrow:{len(covered)}"
     norm = []
     for o in opts:

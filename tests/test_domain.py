@@ -289,7 +289,9 @@ def test_optional_children_semantics():
 
 
 def test_form_narrow_rejected():
-    """根维度覆盖校验（owner 五连撞）：二分 form 被拒，≥3 支覆盖通过。"""
+    """根维度覆盖校验：owner 拍板放宽（2026-09-25）分支下限 3→2——
+    双分支 form 默认放行（form_narrow:2 ×13＝43% 兜底主源）；单分支/零覆盖
+    仍拒；min_form_branches=3 复原五连撞铁律（config quiz.form_branch_min）。"""
     from app.domain import dimensions as D
     st = D.build_state([])
     ok, why = D.validate_question(
@@ -297,7 +299,19 @@ def test_form_narrow_rejected():
          "options": [{"id": "a", "text": "带汤", "tags": ["汤"], "dim": "pot"},
                      {"id": "b", "text": "干爽", "tags": ["米饭"], "dim": "staple"}]},
         st)
-    assert not ok and "form_narrow" in why
+    assert ok                                  # 双分支＝新默认放行
+    ok3, why3 = D.validate_question(
+        {"dimension": "form", "question": "带汤还是干？",
+         "options": [{"id": "a", "text": "带汤", "tags": ["汤"], "dim": "pot"},
+                     {"id": "b", "text": "干爽", "tags": ["米饭"], "dim": "staple"}]},
+        st, min_form_branches=3)
+    assert not ok3 and "form_narrow" in why3    # 翻回 3＝五连撞铁律复原
+    ok1, why1 = D.validate_question(
+        {"dimension": "form", "question": "只问一个方向？",
+         "options": [{"id": "a", "text": "汤锅", "tags": ["汤"], "dim": "pot"},
+                     {"id": "b", "text": "炖汤", "tags": ["汤"], "dim": "pot"}]},
+        st)
+    assert not ok1 and "form_narrow:1" in why1  # 单分支仍拒
     ok2, _ = D.validate_question(
         {"dimension": "form", "question": "这顿先定个大方向？",
          "options": [{"id": "a", "text": "主食", "tags": ["面食"], "dim": "staple"},

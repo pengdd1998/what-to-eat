@@ -27,7 +27,8 @@ CONFIG_DEFAULTS = {
     "env": env_ctx.ENV_DEFAULTS,
     # 画像收敛加速：count≥threshold 时收口下限放宽到 min_steps_profiled（P2）；
     # min_steps 5→4＝owner 拍板观察期（2026-09-15 漏斗收敛改造）
-    "quiz": {"profile_threshold": 3, "min_steps": 4, "min_steps_profiled": 3},
+    "quiz": {"profile_threshold": 3, "min_steps": 4, "min_steps_profiled": 3,
+               "form_branch_min": 2},   # form 首题大方向分支下限（9/25 owner 放宽 3→2）
 }
 
 
