@@ -48,8 +48,10 @@ def test_golden_validate(case):
         pytest.skip("链节点不在根可达路径（树结构调整后需更新用例）")
     ok, why = D.validate_question(case, st)
     assert ok, (case["dimension"], why)
-    # 选项 tags 与维度 tags 相交（防跨类漂移的机读防线）
+    # 选项 tags 须落在维度子树 tags 并集内（v1.5 层级语义：L3 去继承词后，
+    # 选项可用子维度细词，跨支漂移仍拒——防漂移的机读防线）
     node = D.find_node(case["dimension"])
-    if node and node.get("tags") and node["id"] != "form":
+    if node and node["id"] != "form":
+        sub_tags = {t for n in D._subtree(node) for t in (n.get("tags") or [])}
         for o in case["options"]:
-            assert set(o["tags"]) & set(node["tags"]), (o["text"], o["tags"], node["id"])
+            assert set(o["tags"]) & sub_tags, (o["text"], o["tags"], node["id"])

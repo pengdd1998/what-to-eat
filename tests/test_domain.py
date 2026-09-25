@@ -590,3 +590,56 @@ def test_next_question_health_reject_no_crash(monkeypatch):
         "SELECT detail FROM audit_log WHERE action='quiz_q_reject' "
         "ORDER BY id DESC LIMIT 1").fetchone()
     assert row and "health_or_side_dish" in row["detail"]
+
+
+# ---------- 维度树 v1.5（附录 G/B 替换 2026-09-25）健康锚 ----------
+def test_tree_v15_health():
+    """树替换健康锚：①hints id ⊆ 树节点 id（防 typo 死行）；②L2=15；
+    ③v1.5 消歧抽核——「凉拌」不再挂 light/noodle-dry L2、「鱼鲜」不在 meat-grill。"""
+    from app.domain import dimensions as D
+    node_ids = set()
+    def walk(n):
+        node_ids.add(n["id"])
+        for c in n.get("children", []) + n.get("optional_children", []):
+            walk(c)
+    walk(D.CHAIN)
+    assert set(D._DISH_HINTS) <= node_ids
+    l2 = [c for l1 in D.CHAIN["children"] for c in l1.get("children", [])]
+    assert len(l2) == 15
+    assert "凉拌" not in set(D.find_node("light")["tags"])
+    assert "凉拌" not in set(D.find_node("noodle-dry")["tags"])
+    assert "鱼鲜" not in set(D.find_node("meat-grill")["tags"])
+
+
+def test_dish_zero_orphan_all_l2():
+    """零孤儿扫描（图谱 §10 口径）：本地池＋种子菜库每道菜至少与一个 L2 链
+    一致——hints 整表替换的误杀防线（漏词＝误杀原则的机读验证）。"""
+    from app.core import db
+    from app.domain import dimensions as D
+    from app.domain.quiz import LOCAL_DISHES
+    l2 = [c["id"] for l1 in D.CHAIN["children"] for c in l1.get("children", [])]
+    names = [d["name"] for d in LOCAL_DISHES]
+    rows = db.connect().execute(
+        "SELECT dish_name FROM dish_library WHERE active=1").fetchall()
+    names += [r["dish_name"] for r in rows]
+    orphans = [n for n in names
+               if not any(D.dish_consistent(n, {"chain": [c], "ortho": {}})
+                          for c in l2)]
+    assert not orphans, f"零孤儿破坏：{orphans}"
+
+
+def test_subtree_tags_not_loosen_cross_branch():
+    """子树判交只放宽本支细词：跨支身份词仍拒（凉拌选项挂 noodle-soup 题
+    ＝漂移；挂 noodle-dry 题＝dry-cold 细词合法）。"""
+    from app.domain import dimensions as D
+    st = D.build_state([{"q": 1, "option_text": "面", "tags": ["面食"], "dim": "staple"}])
+    ok, why = D.validate_question(
+        {"dimension": "noodle-soup", "question": "汤面还是凉拌？",
+         "options": [{"id": "a", "text": "热汤面", "tags": ["面食", "汤"]},
+                     {"id": "b", "text": "凉拌爽", "tags": ["凉拌", "清爽"]}]}, st)
+    assert not ok and "chain_mismatch" in why
+    ok2, _ = D.validate_question(
+        {"dimension": "noodle-dry", "question": "干香哪种？",
+         "options": [{"id": "a", "text": "热干面", "tags": ["香", "浓郁"]},
+                     {"id": "b", "text": "凉皮凉面", "tags": ["凉拌", "清爽"]}]}, st)
+    assert ok2

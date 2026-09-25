@@ -14,31 +14,37 @@ import json
 
 # ---------- 树定义（分类链：单根纵深；tags 对齐菜池词表） ----------
 CHAIN = {
+    # 图谱 v1.5 附录 G 唯一编译口径（2026-09-25 替换，owner 指令「优化完善维度树」）：
+    # v1.5 消歧三原则——①L3 去继承词（子节点不重复父支词：rice-meat 不再带「米饭」、
+    # filled 子级不带「带馅」）；②跨支身份词归唯一节点（「凉拌」只在 light-cold/dry-cold、
+    # 「鱼鲜」只在 meat-fish、「烤」只在 meat-grill/snack-skewer）——兄弟互斥判定与
+    # 本地收口链特征加权不再被跨支共享词稀释；③L2 瘦身（light 去凉拌、light-snack 去
+    # 酥脆/开胃/烤、light-dimsum 去带馅/鲜、noodle-dry 去凉拌、meat-grill 去鱼鲜）。
     "id": "form", "name": "餐食形态", "tags": [],
     "children": [
         {"id": "staple", "name": "谷物主食系", "tags": ["面食", "米饭"],
          "children": [
              {"id": "noodle-soup", "name": "汤面·汤粉", "tags": ["面食", "米粉", "汤"],
               "optional_children": [
-                  {"id": "noodle-rich", "name": "浇头豪横", "tags": ["面食", "汤", "肉"]},
+                  {"id": "noodle-rich", "name": "浇头豪横", "tags": ["肉", "汤"]},
                   {"id": "noodle-clear", "name": "清汤简约", "tags": ["清淡", "鲜"]},
                   {"id": "noodle-sour-spicy", "name": "酸辣开胃", "tags": ["酸辣", "开胃"]},
               ]},
              {"id": "rice-bowl", "name": "米饭系", "tags": ["米饭"],
               "optional_children": [
-                  {"id": "rice-meat", "name": "荤盖浓香", "tags": ["米饭", "肉", "下饭"]},
-                  {"id": "rice-light", "name": "素/蛋清爽", "tags": ["米饭", "清淡"]},
+                  {"id": "rice-meat", "name": "荤盖浓香", "tags": ["肉", "浓郁", "下饭"]},
+                  {"id": "rice-light", "name": "素/蛋清爽", "tags": ["蔬菜", "清淡"]},
                   {"id": "rice-fried", "name": "炒饭锅气", "tags": ["炒", "镬气"]},
               ]},
              {"id": "filled", "name": "带馅面食", "tags": ["带馅", "面食"],
               "optional_children": [
-                  {"id": "filled-boil", "name": "水煮（水饺/馄饨）", "tags": ["带馅", "汤"]},
-                  {"id": "filled-fry", "name": "煎烙（锅贴/生煎）", "tags": ["带馅", "酥脆"]},
-                  {"id": "filled-steam", "name": "蒸制（包子/小笼）", "tags": ["带馅", "清淡"]},
+                  {"id": "filled-boil", "name": "水煮", "tags": ["汤"]},
+                  {"id": "filled-fry", "name": "煎烙", "tags": ["香", "酥脆"]},
+                  {"id": "filled-steam", "name": "蒸制", "tags": ["清淡"]},
               ]},
-             {"id": "noodle-dry", "name": "干香主食", "tags": ["面食", "饼类", "凉拌"],
+             {"id": "noodle-dry", "name": "干香主食", "tags": ["面食", "饼类"],
               "optional_children": [
-                  {"id": "dry-hot", "name": "热拌浓酱", "tags": ["面食", "浓郁"]},
+                  {"id": "dry-hot", "name": "热拌浓酱", "tags": ["浓郁", "香"]},
                   {"id": "dry-cold", "name": "凉吃爽口", "tags": ["凉拌", "清爽"]},
                   {"id": "dry-wrap", "name": "饼卷堡夹", "tags": ["饼类", "肉"]},
               ]},
@@ -52,13 +58,13 @@ CHAIN = {
               ]},
              {"id": "meat-braise", "name": "烧炖卤", "tags": ["炖卤", "肉", "暖"],
               "optional_children": [
-                  {"id": "stew-pork", "name": "红烧肉系", "tags": ["炖卤", "浓郁", "甜口"]},
+                  {"id": "stew-pork", "name": "红烧肉系", "tags": ["浓郁", "甜口"]},
                   {"id": "stew-chicken", "name": "黄焖鸡系", "tags": ["微辣", "下饭"]},
                   {"id": "stew-beef", "name": "牛腩系", "tags": ["汤", "暖"]},
               ]},
-             {"id": "meat-grill", "name": "烤煎炸", "tags": ["烤", "肉", "鱼鲜"],
+             {"id": "meat-grill", "name": "烤煎炸", "tags": ["烤", "肉"],
               "optional_children": [
-                  {"id": "grill-chicken", "name": "烤鸡炸鸡系", "tags": ["酥脆", "香"]},
+                  {"id": "grill-chicken", "name": "烤鸡炸鸡系", "tags": ["香", "酥脆"]},
                   {"id": "grill-beef-pork", "name": "牛猪排系", "tags": ["浓郁"]},
                   {"id": "grill-fish", "name": "烤鱼类", "tags": ["鱼鲜", "微辣"]},
               ]},
@@ -71,7 +77,7 @@ CHAIN = {
          ]},
         {"id": "pot", "name": "汤锅烫煮系", "tags": ["汤", "暖"],
          "children": [
-             {"id": "pot-soup", "name": "炖汤煲汤", "tags": ["汤", "暖", "鱼鲜"],
+             {"id": "pot-soup", "name": "炖汤煲汤", "tags": ["汤", "暖"],
               "optional_children": [
                   {"id": "soup-meat", "name": "肉汤浓煲", "tags": ["肉", "暖"]},
                   {"id": "soup-fish-tofu", "name": "鱼头豆腐砂锅", "tags": ["鱼鲜", "鲜"]},
@@ -89,7 +95,7 @@ CHAIN = {
                   {"id": "congee-plain", "name": "清粥小菜", "tags": ["清淡"]},
               ]},
          ]},
-        {"id": "light", "name": "轻食小食系", "tags": ["凉拌", "清爽"],
+        {"id": "light", "name": "轻食小食系", "tags": ["清爽"],
          "children": [
              {"id": "light-cold", "name": "凉拌系", "tags": ["凉拌", "清爽"],
               "optional_children": [
@@ -101,13 +107,13 @@ CHAIN = {
                   {"id": "salad-poke", "name": "波奇/谷物碗", "tags": ["鱼鲜"]},
                   {"id": "salad-sandwich", "name": "三明治/饭团", "tags": ["饼类"]},
               ]},
-             {"id": "light-snack", "name": "小食解馋", "tags": ["小食", "解馋", "酥脆", "开胃", "烤"],
+             {"id": "light-snack", "name": "小食解馋", "tags": ["小食", "解馋"],
               "optional_children": [
                   {"id": "snack-fried", "name": "炸物系", "tags": ["酥脆", "香"]},
                   {"id": "snack-lu", "name": "卤味系", "tags": ["炖卤", "开胃"]},
                   {"id": "snack-skewer", "name": "串串烤物", "tags": ["烤"]},
               ]},
-             {"id": "light-dimsum", "name": "点心蒸笼", "tags": ["点心", "清淡", "带馅", "鲜"],
+             {"id": "light-dimsum", "name": "点心蒸笼", "tags": ["点心", "清淡"],
               "optional_children": [
                   {"id": "dimsum-canopy", "name": "小笼蒸饺", "tags": ["带馅"]},
                   {"id": "dimsum-rice-noodle", "name": "肠粉", "tags": ["鲜"]},
@@ -422,9 +428,16 @@ def validate_question(out, state, min_form_branches=2):
                     # dim 指向兄弟支节点＝LLM 导航声明错误 → 拒
                     if cross and o_dim_node and o_dim_node["id"] != dim:
                         return False, f"SiblingConflict:exclusive={sorted(cross)}"
-            if node and node["tags"] and not (ts & set(node["tags"])):
-                # 允许 LLM 用子维度更细 tags：与父节点 tags 有交集即可，否则视为漂移
-                return False, f"chain_mismatch:{dim}"
+            # v1.5 层级语义（2026-09-25 树替换配套）：L3 已去继承词，选项用
+            # 子维度更细 tags（如 noodle-dry 题选项带 dry-cold 的「凉拌」、
+            # meat-grill 题带 grill-fish 的「鱼鲜」）＝dim 自身子树内合法——
+            # 按子树 tags 并集判交；出子树（跨支漂移）仍拒。form 豁免
+            # （其有专门 l1_alias 覆盖门，且空 tags 为设计态）。
+            if dim != CHAIN["id"]:
+                sub_tags = {t for n in _subtree(node) for t in (n.get("tags") or [])} \
+                    if node else set()
+                if sub_tags and not (ts & sub_tags):
+                    return False, f"chain_mismatch:{dim}"
         norm.append({"id": str(o.get("id", ""))[:24], "text": str(o["text"])[:20],
                      "tags": tags})
     # F9 修复（回归轮 P1/P3 实证 2026-09-25）：同文案双胞胎选项拒——两个
@@ -439,60 +452,37 @@ def validate_question(out, state, min_form_branches=2):
 
 # ---------- finalize 一致性：菜名 vs 已锁分类链（关键词级） ----------
 _DISH_HINTS = {
-    # 图谱附录 B（2026-09-16 补强）：关键词级收口一致性；烤鱼→grill、酸菜鱼→fish 的边界
-    "noodle-soup": ("面", "粉", "米线", "馄饨", "云吞"),
-    "noodle-rich": ("牛肉", "叉烧", "排骨", "牛杂"),
+    # 图谱 v1.5 附录 B 全量对照表（2026-09-25 整表替换）：L3 行只保留强身份节点
+    # （noodle 三兄弟/rice-fried/dry-wrap/stew-beef/grill-fish），其余 L3 不设行——
+    # 链钻到 L3 时按最近有词祖先（L2）收口＝一致集更宽（F8-b 窄链同族收益）。
+    # 分配三原则（附录 B 头注）：漏词＝误杀（宽词优先）；跨支可共用（面/煲/饼）；
+    # 本表职责＝收口对齐，跨类漂移由 validate/_guess_chain_node 前置防线拦。
+    # ---- staple 谷物主食系 ----
+    "noodle-soup": ("面", "粉", "米线", "馄饨", "云吞", "泡馍", "粿条"),
+    "noodle-rich": ("牛肉", "肥牛", "牛杂", "排骨", "叉烧"),
     "noodle-clear": ("清汤", "阳春", "上汤"),
     "noodle-sour-spicy": ("酸辣", "螺蛳", "酸汤"),
-    "rice-bowl": ("饭", "煲仔", "丼", "拌饭"),
-    "rice-meat": ("饭",),
-    "rice-light": ("饭", "蛋"),
-    "rice-fried": ("炒饭", "拌饭"),
-    "filled": ("饺", "包子", "馅", "烧麦", "锅贴", "生煎"),
-    "filled-boil": ("水饺", "馄饨"),
-    "filled-fry": ("锅贴", "生煎", "盒子"),
-    "filled-steam": ("包子", "小笼", "烧麦", "蒸饺"),
-    "noodle-dry": ("拌面", "凉面", "热干", "燃面", "油泼"),
-    "dry-hot": ("热干", "炸酱", "油泼"),
-    "dry-cold": ("凉皮", "凉面", "捞汁"),
-    "dry-wrap": ("夹馍", "饼", "汉堡", "手抓饼", "卷", "三明治"),
-    "meat-stir": ("炒", "小炒", "回锅", "里脊", "鱼香", "木须"),
-    "stir-rice": ("小炒", "回锅", "鱼香"),
-    "stir-soft": ("番茄炒蛋", "糖醋", "木须"),
-    "meat-braise": ("炖", "卤", "煲", "红烧", "焖", "黄焖"),
-    "stew-pork": ("红烧肉", "卤肉", "东坡"),
-    "stew-chicken": ("黄焖鸡", "焖", "鸡"),
-    "stew-beef": ("牛腩", "牛肉", "炖"),
-    "meat-grill": ("烤", "煎", "炸", "排"),
-    "grill-chicken": ("烤鸡", "鸡排", "炸鸡", "鸡"),
-    "grill-beef-pork": ("牛排", "猪排", "烤"),
-    "grill-fish": ("烤鱼", "纸包鱼"),
-    "meat-fish": ("鱼", "酸菜", "沸腾", "水煮鱼", "豆花鱼"),
-    "fish-suancai": ("酸菜鱼", "金汤"),
-    "fish-tomato": ("番茄鱼",),
-    "fish-boil": ("水煮鱼", "沸腾鱼"),
-    "pot-soup": ("汤", "煲", "炖汤", "猪肚", "排骨"),
-    "soup-meat": ("牛腩煲", "猪肚鸡", "排骨汤", "老鸭"),
-    "soup-fish-tofu": ("鱼头", "豆腐汤"),
-    "soup-veg": ("味噌", "上汤", "素汤"),
-    "pot-tang": ("麻辣烫", "冒菜", "串串", "钵钵鸡", "小火锅", "关东煮"),
-    "tang-malatang": ("麻辣烫", "冒菜"),
-    "tang-chuan": ("串串", "钵钵鸡"),
-    "tang-hotpot": ("小火锅",),
+    "rice-bowl": ("饭", "煲仔", "丼", "拌饭", "盖浇", "麻婆"),  # 麻婆＝下饭心智（图谱§6.1 川湘行仲裁：麻婆豆腐→rice-bowl）
+    "rice-fried": ("炒饭",),
+    "filled": ("饺", "锅贴", "生煎", "包子", "盒子", "馄饨"),  # 烧麦→light-dimsum；馄饨双语境（边界注4）
+    "noodle-dry": ("面", "凉皮", "热干", "油泼", "燃面", "意面", "夹馍"),
+    "dry-wrap": ("夹馍", "饼", "汉堡", "披萨", "卷", "手抓"),
+    # ---- meat 硬菜小炒系 ----
+    "meat-stir": ("炒", "小炒", "回锅", "里脊", "木须", "锅包"),  # 泛「炒」保不误杀；炒饭漂移由前置防线拦
+    "meat-braise": ("炖", "卤", "煲", "红烧", "焖", "扣肉", "东坡", "水煮牛肉", "水煮肉片"),
+    "stew-beef": ("牛腩", "牛肉"),
+    "meat-grill": ("烤", "煎", "炸", "鸡排", "牛排", "猪排"),
+    "grill-fish": ("烤鱼", "纸包鱼"),          # 先烤后炖心智归烤（附录 D）
+    "meat-fish": ("酸菜鱼", "水煮鱼", "沸腾", "番茄鱼", "豆花鱼", "鱼"),
+    # ---- pot 汤锅烫煮系 ----
+    "pot-soup": ("汤", "煲", "砂锅", "猪肚", "排骨"),
+    "pot-tang": ("麻辣烫", "冒菜", "串串", "钵钵", "小火锅", "香锅"),
     "pot-congee": ("粥",),
-    "congee-meat": ("砂锅粥", "皮蛋瘦肉", "艇仔"),
-    "congee-plain": ("白粥", "清粥"),
-    "light-cold": ("凉", "拌", "口水鸡", "大拌菜"),
-    "cold-meat": ("口水鸡", "白切", "肺片"),
-    "cold-veg": ("凉皮", "拍黄瓜", "大拌菜", "木耳"),
-    "light-salad": ("沙拉", "波奇", "三明治", "饭团", "谷物碗"),
-    "light-snack": ("小龙虾", "卤", "炸", "串", "鸡架", "烤肠"),
-    "snack-fried": ("炸鸡", "鸡架", "炸", "烤肠"),
-    "snack-lu": ("卤味", "卤", "拼盘"),
-    "snack-skewer": ("串", "烤肠"),
-    "light-dimsum": ("小笼", "虾饺", "肠粉", "烧麦", "凤爪", "奶黄"),
-    "dimsum-canopy": ("小笼", "蒸饺", "虾饺"),
-    "dimsum-rice-noodle": ("肠粉",),
+    # ---- light 轻食小食系 ----
+    "light-cold": ("凉拌", "口水鸡", "白切", "拍黄瓜", "大拌菜"),
+    "light-salad": ("沙拉", "波奇", "三明治", "饭团", "定食"),
+    "light-snack": ("小龙虾", "卤味", "炸鸡架", "关东煮", "烤肠", "串"),
+    "light-dimsum": ("小笼", "虾饺", "肠粉", "烧麦", "凤爪", "蒸饺", "蒸蛋"),  # 蒸蛋羹＝蒸制家常（附录 B 边界注 5）
 }
 
 
