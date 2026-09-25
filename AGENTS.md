@@ -4,14 +4,14 @@
 > re-init 触发：依赖大版本升级 / 架构级 ADR 变更 / 漂移复检 >15% / 连续 3 次纠偏指向同一规则缺失
 
 ## 项目是什么
-晚餐决策收口 H5 工具（微信外手机浏览器 + PWA）：≤3 道自适应题 → 唯一结果＋一句推荐语 →「就吃这个」跳外卖平台。栈＝FastAPI + SQLite(WAL) + Jinja2 SSR 单体：无 SPA 构建链、无 Webfont、动效 CSS-only。阶段与排期以 `docs/product/product-plan.md`(v4.1)、`docs/tech/implementation-plan.md`(v3.1)、`docs/execution/iteration-log-W1.md`（滚动迭代日志）为准。
+晚餐决策收口 H5 工具（微信外手机浏览器 + PWA）：3~6 步自适应收敛 → 唯一结果＋一句推荐语 →「就吃这个」跳外卖平台。栈＝FastAPI + SQLite(WAL) + Jinja2 SSR 单体：无 SPA 构建链、无 Webfont、动效 CSS-only。阶段与排期以 `docs/product/product-plan.md`(v4.1)、`docs/tech/implementation-plan.md`(v3.1)、`docs/execution/iteration-log-W1.md`（滚动迭代日志）为准。
 
 ## 目录
 - `app/` — 后端＋模板＋静态资源。两个 ASGI 入口：`app.main:app`（公共面）与 `app.admin:admin_app`（内网面，Bearer ADMIN_TOKEN，仅宿主回环访问）。
 - `migrations/` — 编号 SQL，启动按文件名顺序执行（expand-only）。
 - `scripts/` — 冒烟/备份/指标重算/PoC 探针；`scripts/cron.md`＝定时任务清单。
 - `docs/` — 产品（`docs/product/`）与技术（`docs/tech/`）文档、ADR-001~005（`docs/adr/`）、设计系统（根级 `DESIGN.md`＋`docs/design/`）；`docs/execution/`＝执行归档（迭代日志、PoC 报告、留档数据），改敏感区域前先读；地图见 `docs/README.md`。
-- `deploy/Caddyfile` — 边缘（whattoeat.lifestyle）：公网 `/api/admin/*` 一律 403，反代 api:8000。
+- `deploy/Caddyfile` — 边缘（chishenma.top，2026-09-25 迁移；旧 whattoeat.lifestyle 已弃）：公网 `/api/admin/*` 一律 403，反代 api:8000。
 - `poc/` — 仿真 harness。
 
 ## 常用命令

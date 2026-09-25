@@ -24,7 +24,7 @@ web
 
 ## Operating Context
 
-P-c 载体：微信外手机浏览器直接打开（whattoeat.lifestyle）＋ PWA 安装；微信内 webview 硬拦截（分发话术须指向系统浏览器）。晚间室内/通勤暗光是默认场景 → 暗色为第一公民。移动网络 4G/5G。
+P-c 载体：微信外手机浏览器直接打开（chishenma.top，已 ICP 备案）＋ PWA 安装；微信内 webview 体验受限（分发话术仍建议指向系统浏览器）。晚间室内/通勤暗光是默认场景 → 暗色为第一公民。移动网络 4G/5G。
 
 ## Capabilities and Constraints
 
