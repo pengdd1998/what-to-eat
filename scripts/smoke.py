@@ -174,6 +174,22 @@ def main():
     check("result_served source 合法（llm/local——降级可用不算故障）",
           len(served) == 1 and '"source"' in served[0]["payload"])
 
+    print("[4b] 换一（灯箱换片，F8 回归 2026-09-25：链一致＋换片换出不同的菜）")
+    from app.domain import dimensions as _D
+    st, _, mem0 = call("GET", "/api/memory", anon=anon1)
+    _path0 = (mem0.get("items") or [{}])[0].get("question_log") or []
+    _st0 = _D.build_state(_path0)
+    st, _, sw = call("POST", f"/api/quiz/{sid}/swap", anon=anon1)
+    check("swap 200 且剩次计数", st == 200 and not sw.get("exhausted")
+          and isinstance(sw.get("swaps_left"), int))
+    st, _, fin2 = call("POST", f"/api/quiz/{sid}/finalize", anon=anon1)
+    check("换片后重收口 200 带菜名", st == 200 and bool(fin2.get("name")))
+    check("换片仍链一致（F8 空集逃逸回归）",
+          _D.dish_consistent(str(fin2.get("name", "")), _st0))
+    check("换片换出不同的菜（swap_count 拌哈希＋剔最近已推荐）",
+          fin2.get("name") != fin.get("name"))
+    check("换片后 swaps_left 透传", isinstance(fin2.get("swaps_left"), int))
+
     print("[5] 味觉记忆（口径变化：原 negative/abandon 断言随旧链移除——"
           "quiz 链负反馈走记忆页三值反馈，弃答＝用户直接离开，见迭代日志）")
     st, _, mem = call("GET", "/api/memory", anon=anon1)

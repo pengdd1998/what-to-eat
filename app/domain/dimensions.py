@@ -199,8 +199,14 @@ def build_state(log):
         # 把用户选的主食路径系统性改写成粥。仅 dim 完全缺失（旧会话）才启发。
         if node is None and not dim:
             # 无任何 dim 信息（旧会话）→ 启发（纯正交语义词不进链防截胡）
-            pure_ortho = tags & set(ORTHO_ALIASES)
-            rest = tags - pure_ortho
+            # F2 补完（生产 F4 排查实证 2026-09-25）：剔除集不只 ORTHO_ALIASES
+            # 近义词，须含全部正交取值域词——「清淡」撞 pot-congee、「冰凉」撞
+            # light-salad 的链 tags，本地题库 texture 题选项无 dim（生产可达），
+            # 正交答案曾被挂上假链（假链→可用维度错位→兜底重问乱象放大器）。
+            ortho_words = set(ORTHO_ALIASES)
+            for od in ORTHOGONAL:
+                ortho_words.update(od["values"])
+            rest = tags - ortho_words
             node = _guess_chain_node(rest) if rest else None
         if node:
             # 同支相容守卫（2026-09-16 重放 005 实证）：链非空时启发归类节点必须
@@ -224,6 +230,32 @@ def build_state(log):
                     ortho[aid] = val
                     break
     return {"chain": chain_ids, "ortho": ortho}
+
+
+_ORTHO_IDS = frozenset(od["id"] for od in ORTHOGONAL)
+
+
+def tail_ortho_streak(log) -> int:
+    """log 尾部连续正交题步数（F4 链下钻判定用）。
+
+    单步判正交：dim 是正交维度 id（LLM 正交题选项 dim 归一为题维度），
+    或无 dim 且 tags 命中任一正交取值域（本地正交题）。链题 dim 恒为
+    链节点 id，与正交 id 无交集，不会误判。
+    """
+    n = 0
+    for x in reversed(log or []):
+        dim = x.get("dim") or ""
+        if dim:
+            if dim in _ORTHO_IDS:
+                n += 1
+                continue
+            break                     # 链节点 id＝链题，连击终止
+        tags = set(x.get("tags") or [])
+        if any(tags & set(od["values"]) for od in ORTHOGONAL):
+            n += 1
+            continue
+        break                         # 无 dim 无正交命中＝旧会话/未知，保守终止
+    return n
 
 
 def _subtree(node):

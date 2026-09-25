@@ -340,17 +340,31 @@ def _is_repeat(question: str, log: list) -> bool:
 
 # ---------- 下一步问题 ----------
 
-def _local_question(step_index: int, state=None) -> dict:
+def _local_question(step_index: int, state=None, log=None, chain_only=False) -> dict:
     """本地兜底出题：只出「当前可用维度集」内的题（与 LLM 题共用约束状态机）。
 
     2026-09-16 修复：原按 step 轮换不看约束——「带汤」语境下出「做法」题＝
     本地兜底自身成为偏移源。全部不匹配时出正交题（spice/texture 恒可用）。
     选项带 dim/tags 落库，保证本地题同样推进约束链（与 LLM 题同权）。
+    F4 修复（生产 P3 流程实证 2026-09-25）：①跳过已问过的题面（兜底按步
+    索引轮换曾重问已答粒度）；②chain_only＝强制下钻期只出链题（与 LLM
+    路径的强制下钻同权，防兜底把正交连击续下去）。
     """
     dims = {d["id"] for d in dimensions.available_dims(state)} if state else None
+    chain_ids = ({d["id"] for d in dimensions.available_dims(state)
+                  if d["kind"] == "chain"} if state else None)
     cands = [b for b in LOCAL_BANK
              if not dims or b["dim"] in dims
              or any(o.get("dim") in dims for o in b["options"])]
+    if chain_only and chain_ids:
+        forced = [b for b in cands
+                  if b["dim"] in chain_ids
+                  or any(o.get("dim") in chain_ids for o in b["options"])]
+        cands = forced or cands
+    asked_q = {x.get("question") for x in (log or [])}
+    if asked_q:
+        fresh = [b for b in cands if b["question"] not in asked_q]
+        cands = fresh or cands
     if not cands:
         cands = [b for b in LOCAL_BANK if b["dim"] in ("spice", "texture")]
     bank = cands[step_index % len(cands)]
@@ -407,6 +421,18 @@ def next_question(session, client_ip: str = "") -> dict:
     dedup = (f"【去重】最近已推荐过：{'、'.join(recent)}——结果与选项必须避开这些菜。\n"
              if recent else "")
     dims = dimensions.available_dims(state)
+    # F4 修复（生产 P3 流程实证 2026-09-25：LLM 连问正交、链不下沉→步数被
+    # 吃满触发兜底重问已答粒度，22 题中 7 题 32% 静默落本地的偏移主源）：
+    # 尾部连续 ≥2 问正交且链深 <3 → 本题强制只给链维度（未锁 L1 先锁 L1，
+    # 已锁则下钻子级）；LLM 仍选正交 → 验收拒，本地兜底同步只出链题。
+    chain_only = (dimensions.tail_ortho_streak(log) >= 2
+                  and len(state["chain"]) < 3)
+    if chain_only:
+        _cdims = [d for d in dims if d["kind"] == "chain"]
+        if _cdims:
+            dims = _cdims
+        else:
+            chain_only = False             # 链已到叶：无可下钻，不强制
     dims_json = json.dumps(
         [{"id": d["id"], "name": d["name"],
           **({"取值域": d["values"]} if d["kind"] == "ortho" else {"tags": d["tags"]})}
@@ -442,6 +468,9 @@ def next_question(session, client_ip: str = "") -> dict:
            "若选 form（餐食形态）：给 3~4 个选项，各选项 tags 直接用所属大方向"
            "词（主食/硬菜/汤锅/轻食），严禁二分法锁死用户选择。\n"
            if not state["chain"] else "")
+        + ("" if not chain_only else
+           "分类路径还没收拢——本题必须从 chain 类维度里选一个"
+           "（先定大方向或继续往下细分），不要问正交偏好。\n")
         + f"（已完成步数 {step}；用户选择流水：{answered}）\n"
     )
     res = llm.complete(db.connect(), prompt, scene="cold_start", agent="web", task="next_question")  # scene 受 CHECK；task＝监控粒度（0007）
@@ -459,6 +488,12 @@ def next_question(session, client_ip: str = "") -> dict:
                           f" | dim={data.get('dimension')} q={str(data.get('question',''))[:24]}"
                           f" | opts={[(o.get('dim',''), o.get('tags')) for o in (data.get('options') or [])[:4]]}",
                           file=_sys.stderr)
+                if ok_v and chain_only and \
+                        norm["dimension"] not in {d["id"] for d in dims}:
+                    import sys as _sys
+                    print(f"[WTE-DEBUG] 强制下钻期正交题拒: dim={norm['dimension']}",
+                          file=_sys.stderr)
+                    ok_v = False
                 if ok_v:
                     # 维度归拢启发：LLM 实际问了辣度却标了别的维度（重放 002 实证）
                     # ——归一为 spice 并把选项 tags 规范进取值域，防正交重复提问
@@ -483,8 +518,9 @@ def next_question(session, client_ip: str = "") -> dict:
                           "source": "llm"}
                     _stash_pending(sid_key, _q)      # L4 口径修复（0008 pending_q）
                     return _q
-    # 降级：本地题库（按约束状态选题，2026-09-16 修复本地题自身偏移源）
-    q = _local_question(step, state)
+    # 降级：本地题库（按约束状态选题，2026-09-16 修复本地题自身偏移源；
+    # F4：跳过已问题面＋强制下钻期只出链题）
+    q = _local_question(step, state, log, chain_only=chain_only)
     q["should_stop"] = (step >= min_required - 1)
     q["done"] = False
     _stash_pending(sid_key, q)                       # 本地题同记 source=local
@@ -504,13 +540,17 @@ def answer_option(sid: int, anon_id: str, option_id: str, option_text: str,
     """
     session = get_session(sid, anon_id)
     log = json.loads(session["question_log"] or "[]")
-    # 本地题库选项：把 tags 一并记入，供最终本地匹配
+    # 本地题库选项：把 tags 一并记入，供最终本地匹配（F4：题库选题已是约束
+    # 驱动非按步索引，兜底取 tags 也按 option_id 全库匹配——步索引取条目已错位）
     tags = []
     if from_local_bank:
-        bank = LOCAL_BANK[min(session["step_index"], len(LOCAL_BANK) - 1)]
-        for o in bank["options"]:
-            if o["id"] == option_id:
-                tags = o["tags"]
+        for bank in LOCAL_BANK:
+            for o in bank["options"]:
+                if o["id"] == option_id:
+                    tags = o["tags"]
+                    break
+            if tags:
+                break
     opts = []
     for o in (all_options or []):
         if isinstance(o, dict) and o.get("text"):
@@ -548,11 +588,23 @@ def _local_recommend(session, state=None) -> dict:
 
     state 传入时先按已锁分类链过滤候选（dish_consistent），保证本地兜底
     也不背离收敛路径（重放 004 实证：纯 tags 打分会选出与链冲突的菜）。
+    F8 修复（生产会话 115 实证 2026-09-25）：原实现过滤空集时无过滤放行
+    （top 分候选全部越链→兜底端出越链菜）。现改三层：链特征 tags 打分
+    ×3 加权防通用词压分（暖/汤/清淡/不辣曾把链特征「粥」挤出最优集）→
+    一致性分层放宽（top 分一致→全池一致→链前缀逐级回退）→换片拌
+    swap_count＋剔最近已推荐（换片语义：本地路径也要换出不同的菜）。
     """
     log = json.loads(session["question_log"] or "[]")
     chosen = set()
     for x in log:
         chosen.update(x.get("tags", []))
+    # 链特征 tags（打分加权用）：已锁链路径各节点 tags 并集
+    chain_tags = set()
+    if state is not None:
+        for nid in state["chain"]:
+            node = dimensions.find_node(nid)
+            if node:
+                chain_tags.update(node.get("tags") or [])
     # 标签命中分：命中所选标签越多越靠前；同分时用 seed 哈希打破（确定性）
     # 候选源＝本地池（属性向）＋菜库（需求向→to_attr 归一，图谱§5.2 桥）——多样性×3.5
     pool = list(LOCAL_DISHES)
@@ -569,15 +621,34 @@ def _local_recommend(session, state=None) -> dict:
         pass                                  # 菜库不可达→本地池兜底（降级链）
     scored = []
     for dish in pool:
-        hit = len(chosen & set(dish["tags"])) if chosen else 0
+        dtags = set(dish["tags"])
+        hit = (len(chosen & dtags) + 2 * len(chain_tags & dtags)
+               if (chosen or chain_tags) else 0)
         scored.append((hit, dish))
     best = max(s for s, _ in scored) if scored else 0
     cands = [d for s, d in scored if s >= best] or pool
-    if state is not None:
-        cands = [d for d in cands if dimensions.dish_consistent(d["name"], state)] \
-            or [d for d in cands]
+    if state is not None and state["chain"]:
+        # 分层放宽（F8：禁止无过滤放行）：①top 分且链一致 ②全池链一致
+        # ③链前缀逐级回退（丢最深一级重试，保持「按链过滤」语义直到有菜
+        # ——极窄链在池中无菜时退到最近一级有菜的祖先链，链特征加权仍兜住
+        # 大方向偏好）。前缀耗尽＝无链约束（与未锁链同语义，理论不到达）。
+        ok = [d for d in cands if dimensions.dish_consistent(d["name"], state)]
+        if not ok:
+            ok = [d for d in pool if dimensions.dish_consistent(d["name"], state)]
+        sub = list(state["chain"])
+        while not ok and len(sub) > 1:
+            sub = sub[:-1]
+            ok = [d for d in pool
+                  if dimensions.dish_consistent(d["name"], {"chain": sub, "ortho": {}})]
+        cands = ok or cands
+    # 换片去重：候选有余量时剔最近已推荐（与 LLM 收口去重铁律同语义）；
+    # 哈希拌 swap_count（同序确定＝刷新不重摇，异序换菜＝换片在本地路径生效）
+    recent = set(_recent_dishes(session["anon_id"]))
+    fresh = [d for d in cands if d["name"] not in recent]
+    cands = fresh or cands
     h = hashlib.sha256((session["recommend_seed"] + "|" +
-                        "|".join(sorted(chosen))).encode()).hexdigest()
+                        "|".join(sorted(chosen)) + "|" +
+                        str(session["swap_count"] or 0)).encode()).hexdigest()
     pick = cands[int(h, 16) % len(cands)]
     reason = _build_reason(pick["name"], state,
                            session["meal_scenario"] or "")

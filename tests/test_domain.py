@@ -1,4 +1,5 @@
 """domain 纯逻辑单测：策略/健康过滤/jump/口令/画像（阶段5·拍板#3）。"""
+import json
 from datetime import datetime, timedelta, timezone
 
 from app.core import db
@@ -328,3 +329,130 @@ def test_sibling_conflict_with_dim_declaration():
                      {"id": "b", "text": "清汤浇头", "tags": ["面食", "汤", "清淡"], "dim": "noodle-soup"}]},
         st)
     assert ok2
+
+
+# ---------- F8：本地兜底一致性守卫空集逃逸（生产会话 115 实证 2026-09-25） ----------
+def _f8_session(anon, log, seed="pytest-f8-seed"):
+    """构造带指定 question_log/seed 的会话 dict（_local_recommend 直调用）。"""
+    s = quiz.create_session(anon)
+    d = {k: s[k] for k in s.keys()}
+    d["question_log"] = json.dumps(log, ensure_ascii=False)
+    d["recommend_seed"] = seed
+    return d
+
+
+def test_local_recommend_no_empty_set_escape():
+    """F8 回归锚（会话 115）：链锁粥品后，top 分候选全越链时禁止无过滤放行。
+
+    旧实现：胡椒猪肚鸡汤等汤煲菜凭通用 tags（汤/暖/不辣/清淡）稳居最优集
+    → 一致性过滤空集 → or 短路放行 → 端出越链菜。修复后必须落全池一致层
+    （本地池皮蛋瘦肉粥/小笼包配粥＋种子砂锅粥系，恒非空）。
+    """
+    log = [
+        {"step": 0, "question": "这顿先定个大方向？", "option_text": "热乎一锅",
+         "tags": ["汤", "暖"], "dim": "pot"},
+        {"step": 1, "question": "热乎一锅，想要哪种？", "option_text": "粥品暖胃",
+         "tags": ["粥", "清淡"], "dim": "pot-congee"},
+        {"step": 2, "question": "温度？", "option_text": "凉快些", "tags": ["冰凉"]},
+        {"step": 3, "question": "辣度？", "option_text": "不辣", "tags": ["不辣"]},
+    ]
+    s = _f8_session("pytest-f8-escape", log)
+    state = quiz.dimensions.build_state(log)
+    assert state["chain"][-1] == "pot-congee"
+    rec = quiz._local_recommend(s, state)
+    assert quiz.dimensions.dish_consistent(rec["name"], state), \
+        f"F8 空集逃逸回归：{rec['name']} 越出链 {state['chain']}"
+
+
+def test_local_recommend_swap_changes_dish():
+    """F8 换片语义锚：哈希拌 swap_count——本地路径换片必须换出不同的菜
+    （同序确定＝刷新不重摇；种子钉死保测试确定性）。"""
+    log = [
+        {"step": 0, "question": "这顿先定个大方向？", "option_text": "热乎一锅",
+         "tags": ["汤", "暖"], "dim": "pot"},
+        {"step": 1, "question": "热乎一锅，想要哪种？", "option_text": "粥品暖胃",
+         "tags": ["粥", "清淡"], "dim": "pot-congee"},
+        {"step": 2, "question": "温度？", "option_text": "凉快些", "tags": ["冰凉"]},
+        {"step": 3, "question": "辣度？", "option_text": "不辣", "tags": ["不辣"]},
+    ]
+    state = quiz.dimensions.build_state(log)
+    names = set()
+    for sc in range(6):
+        s = _f8_session("pytest-f8-swap", log)
+        s["swap_count"] = sc
+        rec = quiz._local_recommend(s, state)
+        assert quiz.dimensions.dish_consistent(rec["name"], state)
+        names.add(rec["name"])
+    assert len(names) >= 2, "换片拌 swap_count 失效：6 次换片全同一道菜"
+
+
+def test_local_recommend_chain_tags_weighted():
+    """F8 加权锚：链特征 tags ×3——同命中数下链特征菜（粥）须压过通用词菜。"""
+    log = [{"step": 0, "question": "热乎一锅，想要哪种？", "option_text": "粥品暖胃",
+            "tags": ["粥"], "dim": "pot-congee"}]
+    state = quiz.dimensions.build_state(log)
+    # 直接核对打分：皮蛋瘦肉粥（粥/暖/清淡/肉）应高于同 chosen 命中的非粥菜
+    s = _f8_session("pytest-f8-weight", log)
+    rec = quiz._local_recommend(s, state)
+    assert "粥" in rec["name"]
+
+
+# ---------- F4：链下钻失守（生产 P3 流程实证 32% 兜底率 2026-09-25） ----------
+def test_tail_ortho_streak():
+    """尾部连续正交计数：LLM 正交题（dim=正交id）/本地正交题（无dim）都算；
+    链题（dim=链节点id）与旧会话未知步保守终止。"""
+    from app.domain import dimensions as D
+    log = [
+        {"dim": "pot", "tags": ["汤", "暖"]},          # 链题
+        {"tags": ["不辣"]},                             # 本地正交（无 dim）
+        {"dim": "spice", "tags": ["不辣"]},             # LLM 正交
+        {"dim": "temp", "tags": ["冰凉"]},              # LLM 正交
+    ]
+    assert D.tail_ortho_streak(log) == 3
+    assert D.tail_ortho_streak(log[:1]) == 0
+    assert D.tail_ortho_streak([]) == 0
+
+
+def test_local_question_chain_only_and_asked_skip():
+    """强制下钻期本地兜底只出链题；已问题面跳过（按步索引轮换曾重问）。"""
+    # ①链空＋两问正交 → 只出 form 链题
+    q = quiz._local_question(2, {"chain": [], "ortho": {"spice": "不辣",
+                                                        "texture": "清淡"}},
+                             log=[{"question": "辣度到哪？"},
+                                  {"question": "口味浓淡偏向？"}],
+                             chain_only=True)
+    assert q["question"] == "这顿先定个大方向？"
+    # ②链锁 pot＋两问正交 → 只出 pot 子级链题（不出正交题）
+    q2 = quiz._local_question(3, {"chain": ["pot"], "ortho": {"spice": "不辣"}},
+                              log=[{"dim": "pot", "question": "这顿先定个大方向？"},
+                                   {"dim": "spice", "question": "辣度到哪？"},
+                                   {"dim": "temp", "question": "温度？"}],
+                              chain_only=True)
+    assert q2["question"] == "热乎一锅，想要哪种？"
+    assert {o["dim"] for o in q2["options"]} == {"pot-soup", "pot-tang", "pot-congee"}
+    # ③已问题面跳过：form 题已问（但 state 伪造为未锁）→ 轮换到未问的正交题
+    q3 = quiz._local_question(0, {"chain": [], "ortho": {}},
+                              log=[{"question": "这顿先定个大方向？"}])
+    assert q3["question"] != "这顿先定个大方向？"
+
+
+def test_next_question_forces_chain_after_ortho_streak():
+    """F4 集成锚：两问正交后（LLM stub 失败走本地兜底），出题必须是链题。
+    未修时按步索引轮换会出到「口味浓淡偏向？」（step=2 → 正交题）。"""
+    from app.core import db as _db
+    anon = "pytest-f4-force"
+    s = quiz.create_session(anon)
+    log = [
+        {"step": 0, "question": "辣度到哪？", "option_text": "不辣",
+         "options": [], "tags": ["不辣"]},
+        {"step": 1, "question": "温度？", "option_text": "冰凉",
+         "options": [], "tags": ["冰凉"]},
+    ]
+    with _db.tx() as t:
+        t.execute("UPDATE quiz_session SET question_log=?, step_index=2 "
+                  "WHERE id=?", (json.dumps(log, ensure_ascii=False), s["id"]))
+    s2 = quiz.get_session(s["id"], anon)
+    q = quiz.next_question(s2)
+    assert not q.get("done")
+    assert "大方向" in q["question"], \
+        f"强制下钻失效：两问正交后仍出非链题 {q['question']!r}"
