@@ -536,7 +536,16 @@ def next_question(session, client_ip: str = "") -> dict:
                                     if any(k in o["text"] for k in kws):
                                         o["tags"] = [v]
                                         break
-                    opts = [{**o, "dim": norm["dimension"]} for o in norm["options"]]
+                    opts = [{**o, **({} if (norm["dimension"] == "form"
+                                             and o.get("dim"))
+                                         else {"dim": norm["dimension"]})}
+                            for o in norm["options"]]
+                    # F4-残修复（9/26，真机 P5 实证）：form 题选项 dim 曾被整体
+                    # 覆写为 "form"——用户首问表达的方向（硬菜→meat）不入链，
+                    # 链停 [form]，强制期兜底按步索引乱选分支（选硬菜被带偏
+                    # pot-soup 端牛肉拉面）。form 选项自带 L1 dim 时保留，与
+                    # 本地题库路径（选项 dim 直挂 L1）链深语义对齐；其余维度
+                    # 照旧覆写题维度（锁题维度语义不变）。
                     _q = {"question": norm["question"],
                           "options": opts, "step": step,
                           "should_stop": (bool(data.get("should_stop"))

@@ -214,6 +214,13 @@ def build_state(log):
                 ortho_words.update(od["values"])
             rest = tags - ortho_words
             node = _guess_chain_node(rest) if rest else None
+        # F4-残修复（9/26，真机 P5 实证）：dim=form 的条目＝LLM 首题方向词
+        # 被覆写为 form 的存量路径——按已表达方向（tags∩L1 tags 或文案别名）
+        # 下沉 L1，用户首问选择入链（不再留链尾 [form] 给兜底步索引乱带偏）
+        if node is not None and node["id"] == CHAIN["id"]:
+            sink = _sink_l1(tags, x.get("option_text", ""))
+            if sink is not None:
+                node = sink
         if node:
             # 同支相容守卫（2026-09-16 重放 005 实证）：链非空时启发归类节点必须
             # 在链尾子树内（或为链尾祖先）——跨支启发结果跳过不入链，防链污染
@@ -337,6 +344,33 @@ MAX_ASK_STEPS = 6     # 导航式出题的强制收口步数（漏斗后步数�
 
 
 # ---------- 验收器：LLM 出题合规 ----------
+# L1 别名表（validate form 覆盖判定＋build_state form 根条目下沉共用；
+# 2026-09-26 自 validate_question 内提取为模块级单源）
+_L1_ALIAS = {"staple": ("主食", "谷物", "饭", "面"),
+             "meat": ("硬菜", "肉", "炒菜", "小炒"),
+             "pot": ("汤锅", "汤水", "汤", "烫煮", "粥"),
+             "light": ("轻食", "小食", "凉", "点心", "清爽")}
+
+
+def _sink_l1(tags, option_text: str):
+    """form 根条目下沉：按已表达方向锁定 L1（F4-残修复，9/26）。
+
+    LLM form 题选项 dim 曾被整体覆写为 form（quiz.py 9/17 既有），用户首问
+    表达的方向（硬菜→meat）不入链 → 链停 [form]，后续强制期兜底按步索引
+    乱选分支（真机 P5：选硬菜被带偏 pot-soup 端牛肉拉面）。双保险之一：
+    存量会话/无 dim 选项在此按 tags∩L1 tags 或文案别名下沉；新会话由
+    quiz 层保留选项 dim 直接锁 L1（两路径链深语义对齐本地题库路径）。
+    """
+    text = str(option_text or "")
+    for l1 in CHAIN["children"]:
+        if tags & set(l1.get("tags") or []):
+            return l1
+    for l1 in CHAIN["children"]:
+        if any(a in text for a in _L1_ALIAS.get(l1["id"], ())):
+            return l1
+    return None
+
+
 def validate_question(out, state, min_form_branches=2):
     """校验 LLM 出题：返回 (True, 归一化题) 或 (False, 原因)。
 
@@ -361,20 +395,21 @@ def validate_question(out, state, min_form_branches=2):
     # （选项 dim 或 tags 命中均可）；不满足→拒，本地四方向题兜底。
     if dim == CHAIN["id"]:
         # L1 覆盖判定（2026-09-16 拒因取证：LLM 按指引给「主食/硬菜/汤锅/轻食」
-        # 但精确词表交集计 0 误拒）——dim 命中 OR 别名/名称子串匹配
-        l1_alias = {"staple": ("主食", "谷物", "饭", "面"),
-                    "meat": ("硬菜", "肉", "炒菜", "小炒"),
-                    "pot": ("汤锅", "汤水", "汤", "烫煮", "粥"),
-                    "light": ("轻食", "小食", "凉", "点心", "清爽")}
+        # 但精确词表交集计 0 误拒）——dim 命中 OR 别名/名称子串匹配。
+        # 9/26 审查缺陷①修复：本循环先于逐元素 isinstance 校验裸遍历 opts，
+        # 混合类型（首元素 dict＋后续 str/null）曾 AttributeError→/next 500
+        # 击穿「验收不过→本地兜底」红线——补元素守卫。
         covered = set()
         for o in opts:
+            if not isinstance(o, dict):
+                return False, "bad_option"
             odim = str(o.get("dim", "") or "")
-            if odim in l1_alias:
+            if odim in _L1_ALIAS:
                 covered.add(odim)
                 continue
             otext = str(o.get("text", ""))
             otags = "".join(str(t) for t in (o.get("tags") or []))
-            for lid, aliases in l1_alias.items():
+            for lid, aliases in _L1_ALIAS.items():
                 if any(a in otext or a in otags for a in aliases):
                     covered.add(lid)
                     break
@@ -420,13 +455,22 @@ def validate_question(out, state, min_form_branches=2):
                 # ——遮蔽后 norm 选项的 id/text 取自末位选项而 tags 取自当前选项
                 # ＝「同文案不同 tags」双胞胎按钮的制造机（自 F3 落地即存在；
                 # 上轮「米粉标米饭」观察 B 同源）。改独立名 so。
+                # 9/26 审查缺陷①修复：内层在逐元素 isinstance 校验（外层）之前
+                # 遍历全部选项——混合类型（dict＋str/null）曾 so.get →AttributeError
+                # →/next 500；补元素守卫跳过（拒由外层循环统一裁决）。
                 for so in opts:
+                    if not isinstance(so, dict):
+                        continue
                     ots = set(so.get("tags") or [])
                     cross = ots & sib_exclusive
-                    o_dim_node = (find_node(str(so["dim"])) if so.get("dim") else None)
-                    # 豁免：选项 dim 声明本支子级（细划）或无 dim（老格式）→ 不拒；
-                    # dim 指向兄弟支节点＝LLM 导航声明错误 → 拒
-                    if cross and o_dim_node and o_dim_node["id"] != dim:
+                    o_dim_node = (find_node(str(so.get("dim") or "")) if so.get("dim") else None)
+                    # 豁免（9/26 审查缺陷②修复）：选项 dim 声明 dim **子树内**
+                    # 节点（含自身＝同层、子级＝细划）→ 不拒；指向子树外
+                    # （兄弟支）＝LLM 导航声明错误 → 拒。原实现只认同节点，
+                    # 「本支子级 dim＋跨支独有词」的合法细划曾被误拒
+                    # （v1.5 去跨支词后 dry-cold 的凉拌必落 sib_exclusive）。
+                    if cross and o_dim_node and \
+                            o_dim_node["id"] not in {n["id"] for n in _subtree(node)}:
                         return False, f"SiblingConflict:exclusive={sorted(cross)}"
             # v1.5 层级语义（2026-09-25 树替换配套）：L3 已去继承词，选项用
             # 子维度更细 tags（如 noodle-dry 题选项带 dry-cold 的「凉拌」、
@@ -439,7 +483,10 @@ def validate_question(out, state, min_form_branches=2):
                 if sub_tags and not (ts & sub_tags):
                     return False, f"chain_mismatch:{dim}"
         norm.append({"id": str(o.get("id", ""))[:24], "text": str(o["text"])[:20],
-                     "tags": tags})
+                     "tags": tags,
+                     # F4-残配套（9/26）：透传选项自带 dim——form 题选项声明 L1
+                     # 时由 quiz 层保留（用户首问方向直接入链）
+                     **({"dim": str(o.get("dim"))[:40]} if o.get("dim") else {})})
     # F9 修复（回归轮 P1/P3 实证 2026-09-25）：同文案双胞胎选项拒——两个
     # 按钮文字一模一样而 tags 互相矛盾（其一还带兄弟支 tag），用户等于少
     # 一个选项且错标 tags 会污染链状态。拒→本地题库兜底。

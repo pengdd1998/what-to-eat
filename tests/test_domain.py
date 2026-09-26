@@ -155,8 +155,9 @@ def test_dims_available_root_then_children():
     ids = [d["id"] for d in D.available_dims(st)]
     assert ids[0] == "form"   # 根＋5 正交（图谱 v1.0）
     assert set(ids[1:]) == {"spice", "texture", "protein", "temp", "pace"}
-    # 选 form（模拟 log）后 → 子树前沿＝L1 四支
-    st2 = D.build_state([{"question": "q", "option_text": "主食正餐",
+    # form 根条目方向中性（无别名/tags）→ 链停 form → 子树前沿＝L1 四支
+    # （F4-残新语义：带方向词的 form 条目按 _sink_l1 下沉 L1，见专测）
+    st2 = D.build_state([{"question": "q", "option_text": "定个方向",
                           "tags": [], "dim": "form"}])
     dims2 = [d["id"] for d in D.available_dims(st2)]
     assert set(dims2) == {"staple", "meat", "pot", "light",
@@ -643,3 +644,94 @@ def test_subtree_tags_not_loosen_cross_branch():
          "options": [{"id": "a", "text": "热干面", "tags": ["香", "浓郁"]},
                      {"id": "b", "text": "凉皮凉面", "tags": ["凉拌", "清爽"]}]}, st)
     assert ok2
+
+
+# ---------- 9/26 审查两枚＋F4-残（真机 v1.5 回归轮后批） ----------
+def test_validate_mixed_type_options_no_crash():
+    """审查缺陷①锚：混合类型 options（dict＋str/null）不得 AttributeError→500——
+    form 覆盖循环与兄弟内层循环都先于逐元素校验裸遍历，须元素守卫。"""
+    from app.domain import dimensions as D
+    st = D.build_state([])
+    # form 维度：form 覆盖循环先炸的老路径
+    ok, why = D.validate_question(
+        {"dimension": "form", "question": "方向？",
+         "options": [{"id": "a", "text": "主食", "tags": ["面食"], "dim": "staple"},
+                     "汤锅"]}, st)
+    assert not ok and why == "bad_option"
+    # chain 维度：兄弟内层循环先炸的老路径（首元素 dict 合法＋后续 str）
+    st2 = D.build_state([{"q": 1, "option_text": "面", "tags": ["面食"], "dim": "staple"}])
+    ok2, why2 = D.validate_question(
+        {"dimension": "noodle-soup", "question": "哪种汤面？",
+         "options": [{"id": "a", "text": "牛肉面", "tags": ["面食", "汤"]}, 42]}, st2)
+    assert not ok2
+
+
+def test_sibling_subtree_exemption():
+    """审查缺陷②锚：豁免认 dim 子树——本支子级 dim＋跨支独有词＝合法细划放行
+    （原实现只认同节点，dry-cold 的凉拌在 v1.5 后必落 sib_exclusive 被误拒）；
+    dim 指向兄弟支仍拒。"""
+    from app.domain import dimensions as D
+    st = D.build_state([{"q": 1, "option_text": "面", "tags": ["面食"], "dim": "staple"}])
+    ok, why = D.validate_question(
+        {"dimension": "noodle-dry", "question": "干香哪种？",
+         "options": [{"id": "a", "text": "热干面", "tags": ["浓郁", "香"], "dim": "dry-hot"},
+                     {"id": "b", "text": "凉皮凉面", "tags": ["凉拌", "清爽"], "dim": "dry-cold"}]},
+        st)
+    assert ok, why                      # dry-cold＝本支子级，凉拌是其身份词
+    ok2, why2 = D.validate_question(
+        {"dimension": "noodle-dry", "question": "干香哪种？",
+         "options": [{"id": "a", "text": "热干面", "tags": ["浓郁", "香"], "dim": "dry-hot"},
+                     {"id": "b", "text": "凉拌素菜", "tags": ["凉拌", "清爽"], "dim": "light-cold"}]},
+        st)
+    assert not ok2 and "SiblingConflict" in why2   # 指向兄弟支＝导航声明错误
+
+
+def test_form_direction_enters_chain():
+    """F4-残锚（真机 P5：选硬菜被兜底带偏 pot-soup）：
+    ①LLM form 题选项 L1 dim 保留（不被覆写为 form）→ 答题后链直接锁 L1；
+    ②存量 dim=form 条目按 tags/文案下沉（硬菜→meat）；
+    ③下沉后强制期兜底只在已锁分支内出题。"""
+    from app.core import db as _db
+    from app.domain import dimensions as D
+    anon = "pytest-f4res"
+    s = quiz.create_session(anon)
+
+    def _form_q(conn, prompt, **kw):
+        return {"ok": True, "content":
+                '{"dimension":"form","question":"这顿先定个大方向？","options":'
+                '[{"id":"a","text":"硬菜肉类","tags":["肉","炖卤"],"dim":"meat"},'
+                '{"id":"b","text":"热乎一锅","tags":["汤","暖"],"dim":"pot"},'
+                '{"id":"c","text":"轻食小份","tags":["凉拌","清爽"],"dim":"light"}]}'}
+
+    import app.domain.quiz as Q
+    orig = Q.llm.complete
+    Q.llm.complete = _form_q
+    try:
+        q = quiz.next_question(quiz.get_session(s["id"], anon))
+    finally:
+        Q.llm.complete = orig
+    meat_opt = next(o for o in q["options"] if o.get("text") == "硬菜肉类")
+    assert meat_opt.get("dim") == "meat"       # ①dim 保留
+    quiz.answer_option(s["id"], anon, meat_opt["id"], "硬菜肉类",
+                       q["question"], False, q["options"])
+    st = D.build_state(json.loads(
+        quiz.get_session(s["id"], anon)["question_log"]))
+    assert st["chain"][-1] == "meat"           # ①答题后方向入链
+    # ②存量 form 条目下沉（dim=form＋硬菜文案/tags）
+    st2 = D.build_state([{"q": 1, "option_text": "硬菜肉类（炒/烧/烤/卤）",
+                          "tags": ["肉", "炖卤"], "dim": "form"}])
+    assert st2["chain"] == ["meat"]
+    st3 = D.build_state([{"q": 1, "option_text": "轻食小份", "tags": ["凉拌", "清爽"],
+                          "dim": "form"}])
+    assert st3["chain"] == ["light"]
+    st4 = D.build_state([{"q": 1, "option_text": "随便", "tags": [], "dim": "form"}])
+    assert st4["chain"] == ["form"]            # 无方向信息＝维持原状
+    # ③强制期兜底只在已锁分支内（meat 分支题，不再步索引轮盘）
+    q2 = quiz._local_question(3, {"chain": ["meat"], "ortho": {"spice": "不辣"}},
+                              log=[{"dim": "meat", "question": "大方向？"},
+                                   {"dim": "spice", "question": "辣度？"},
+                                   {"dim": "temp", "question": "温度？"}],
+                              chain_only=True)
+    assert q2["question"] == "硬菜想吃哪种做法？"
+    assert {o["dim"] for o in q2["options"]} <= {"meat-stir", "meat-braise",
+                                                 "meat-grill", "meat-fish"}
