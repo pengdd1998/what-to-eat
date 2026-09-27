@@ -735,3 +735,57 @@ def test_form_direction_enters_chain():
     assert q2["question"] == "硬菜想吃哪种做法？"
     assert {o["dim"] for o in q2["options"]} <= {"meat-stir", "meat-braise",
                                                  "meat-grill", "meat-fish"}
+
+
+# ---------- 9/27 确认轮三修复（混合类型补完/下沉长词优先/结果 tags 过滤） ----------
+def test_next_question_mixed_type_no_crash(monkeypatch):
+    """9/27 审查补完锚：validate 本体守卫后，调用方拒绝路径的调试打印对
+    原始 options 裸调 .get 仍是 500 入口——经 next_question 全链不炸、
+    落本地兜底、拒因留痕 validate:bad_option。"""
+    from app.core import db as _db
+    anon = "pytest-mixed927"
+    s = quiz.create_session(anon)
+
+    def _mixed(conn, prompt, **kw):
+        return {"ok": True, "content":
+                '{"dimension":"form","question":"方向？","options":'
+                '[{"id":"a","text":"主食","tags":["面食"],"dim":"staple"},'
+                '"热乎汤锅"]}'}
+
+    monkeypatch.setattr(quiz.llm, "complete", _mixed)
+    q = quiz.next_question(quiz.get_session(s["id"], anon))   # 修复前此处 500
+    assert q["source"] == "local"
+    row = _db.connect().execute(
+        "SELECT detail FROM audit_log WHERE action='quiz_q_reject' "
+        "ORDER BY id DESC LIMIT 1").fetchone()
+    assert row and "bad_option" in row["detail"]
+
+
+def test_sink_l1_longest_word_wins():
+    """下沉长词优先锚（真机 P5：「热乎汤锅，涮肉煮菜」被单字「肉」抢先
+    命中沉到 meat）——复合方向词（汤锅 2 字）须压过单字共享词（肉 1 字）。"""
+    from app.domain import dimensions as D
+    st = D.build_state([{"q": 1, "option_text": "热乎汤锅，涮肉煮菜",
+                         "tags": ["汤", "肉"], "dim": "form"}])
+    assert st["chain"] == ["pot"]              # 汤锅（2）压肉（1）
+    st2 = D.build_state([{"q": 1, "option_text": "整点硬菜解馋",
+                          "tags": ["肉", "炖卤"], "dim": "form"}])
+    assert st2["chain"] == ["meat"]            # 硬菜（2）主导
+    st3 = D.build_state([{"q": 1, "option_text": "一碗主食吃饱",
+                          "tags": ["面食"], "dim": "form"}])
+    assert st3["chain"] == ["staple"]
+
+
+def test_local_recommend_filters_operational_tags():
+    """结果 tags 展示层过滤锚（真机 P1：「浓郁 · 预算30以下」）——运营向
+    词不进结果 tags，属性词保留；打分不受影响。"""
+    from app.domain import dimensions as D
+    log = [{"step": 0, "question": "这顿先定个大方向？", "option_text": "硬菜小炒",
+            "tags": ["肉", "炒"], "dim": "meat"}]
+    s = _f8_session("pytest-tagfilter", log)
+    state = D.build_state(log)
+    for _ in range(4):
+        rec = quiz._local_recommend(s, state)
+        assert "预算" not in "".join(rec["tags"]), rec["tags"]
+        assert all(t in D.ATTR_VOCAB for t in rec["tags"]), rec["tags"]
+        assert rec["tags"], "过滤后不应为空（前二兜底）"

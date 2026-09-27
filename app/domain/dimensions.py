@@ -352,6 +352,16 @@ _L1_ALIAS = {"staple": ("主食", "谷物", "饭", "面"),
              "light": ("轻食", "小食", "凉", "点心", "清爽")}
 
 
+# 属性词表全集（9/27 真机轮：结果 tags 曾直通菜库运营向词「预算30以下」——
+# 本地收口展示层过滤基准＝链 tags ∪ 正交取值 ∪ 需求向映射产物）
+ATTR_VOCAB = frozenset(
+    t for n in _subtree(CHAIN) for t in (n.get("tags") or []))
+for _od in ORTHOGONAL:
+    ATTR_VOCAB |= set(_od["values"])
+for _vals in NEED_TO_ATTR.values():
+    ATTR_VOCAB |= set(_vals)
+
+
 def _sink_l1(tags, option_text: str):
     """form 根条目下沉：按已表达方向锁定 L1（F4-残修复，9/26）。
 
@@ -360,15 +370,22 @@ def _sink_l1(tags, option_text: str):
     乱选分支（真机 P5：选硬菜被带偏 pot-soup 端牛肉拉面）。双保险之一：
     存量会话/无 dim 选项在此按 tags∩L1 tags 或文案别名下沉；新会话由
     quiz 层保留选项 dim 直接锁 L1（两路径链深语义对齐本地题库路径）。
+
+    9/27 真机轮修正（P5 实证「汤锅，涮肉」被单字「肉」抢先命中沉到 meat）：
+    改最长命中词评分——复合方向词（汤锅/主食/硬菜/轻食，2 字）天然压过
+    单字共享词（肉/汤/面，1 字），再按命中词数、树序打破平局。
     """
     text = str(option_text or "")
+    best, best_key = None, (0, 0)
     for l1 in CHAIN["children"]:
-        if tags & set(l1.get("tags") or []):
-            return l1
-    for l1 in CHAIN["children"]:
-        if any(a in text for a in _L1_ALIAS.get(l1["id"], ())):
-            return l1
-    return None
+        words = list(tags & set(l1.get("tags") or []))
+        words += [a for a in _L1_ALIAS.get(l1["id"], ()) if a in text]
+        if not words:
+            continue
+        key = (max(len(w) for w in words), len(words))
+        if key > best_key:
+            best, best_key = l1, key
+    return best
 
 
 def validate_question(out, state, min_form_branches=2):

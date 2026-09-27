@@ -507,9 +507,13 @@ def next_question(session, client_ip: str = "") -> dict:
                                                           min_form_branches=_minfb)
                 if not ok_v:
                     import sys as _sys
+                    # 9/27 审查补完：validate 本体已守卫混合类型，此处对**原始**
+                    # options 裸调 .get 仍是 500 入口——打印处补元素守卫
+                    _raw_opts = [o for o in (data.get("options") or [])[:4]
+                                 if isinstance(o, dict)]
                     print(f"[WTE-DEBUG] validate 拒: {norm}"
                           f" | dim={data.get('dimension')} q={str(data.get('question',''))[:24]}"
-                          f" | opts={[(o.get('dim',''), o.get('tags')) for o in (data.get('options') or [])[:4]]}",
+                          f" | opts={[(o.get('dim',''), o.get('tags')) for o in _raw_opts]}",
                           file=_sys.stderr)
                     _reject_trace(f"validate:{norm}",
                                   str(data.get("dimension", "")), step)
@@ -693,7 +697,11 @@ def _local_recommend(session, state=None) -> dict:
     pick = cands[int(h, 16) % len(cands)]
     reason = _build_reason(pick["name"], state,
                            session["meal_scenario"] or "")
-    return {"name": pick["name"], "tags": pick["tags"], "reason": reason}
+    # 9/27 真机轮：结果 tags 曾直通菜库运营向词（「预算30以下」）——展示层
+    # 按属性词表全集过滤（打分仍用全 tags 不受影响）；全滤空时留前二兜底
+    out_tags = [t for t in pick["tags"] if t in dimensions.ATTR_VOCAB] \
+        or pick["tags"][:2]
+    return {"name": pick["name"], "tags": out_tags, "reason": reason}
 
 
 def finalize(sid: int, anon_id: str, client_ip: str = "") -> dict:
