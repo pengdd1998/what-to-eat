@@ -789,3 +789,60 @@ def test_local_recommend_filters_operational_tags():
         assert "预算" not in "".join(rec["tags"]), rec["tags"]
         assert all(t in D.ATTR_VOCAB for t in rec["tags"]), rec["tags"]
         assert rec["tags"], "过滤后不应为空（前二兜底）"
+
+
+# ---------- 9/29 评审三修（容器级切片/标量 tags/配置单源） ----------
+def test_next_question_nonlist_options_no_crash(monkeypatch):
+    """9/28 复审残留锚：顶层非 list 型 options（JSON 对象/数字）——validate 本体
+    返回 bad_options_count 后，拒绝路径调试打印的 [:4] 切片曾 TypeError→/next
+    500（9/27 的元素守卫挡不住容器级）。经 next_question 全链不炸、落本地、
+    拒因留痕。"""
+    from app.core import db as _db
+    anon = "pytest-nl929"
+    s = quiz.create_session(anon)
+    for bad_opts in ({"a": 1}, 42):
+        def _bad(conn, prompt, _o=bad_opts, **kw):
+            return {"ok": True, "content": json.dumps(
+                {"dimension": "form", "question": "方向？", "options": _o})}
+        monkeypatch.setattr(quiz.llm, "complete", _bad)
+        q = quiz.next_question(quiz.get_session(s["id"], anon))   # 修复前此处 500
+        assert q["source"] == "local"
+        row = _db.connect().execute(
+            "SELECT detail FROM audit_log WHERE action='quiz_q_reject' "
+            "ORDER BY id DESC LIMIT 1").fetchone()
+        assert row and "bad_options_count" in row["detail"]
+
+
+def test_answer_option_scalar_tags_no_crash():
+    """缺陷⑲锚：/answer 的 all_options 客户端可控——标量 tags（数字）与
+    非 list 容器（数字）曾 TypeError→500（自会话自伤面）。归一后不炸、
+    落库无 tags、正常路径不受影响。"""
+    from app.core import db as _db
+    anon = "pytest-sc929"
+    s = quiz.create_session(anon)
+    sid = s["id"]
+    # ①元素 tags 标量
+    r = quiz.answer_option(sid, anon, "a", "选项A", "问题？", False,
+                           all_options=[{"id": "a", "text": "选项A", "tags": 5}])
+    log = json.loads(quiz.get_session(sid, anon)["question_log"])
+    assert log[-1]["tags"] == [] and log[-1]["options"][0]["text"] == "选项A"
+    # ②all_options 整体非 list
+    r2 = quiz.answer_option(sid, anon, "b", "选项B", "再问？", False,
+                            all_options=7)
+    log2 = json.loads(quiz.get_session(sid, anon)["question_log"])
+    assert log2[-1]["options"] == [] and log2[-1]["tags"] == []
+    # ③正常路径不受影响（tags 列表＋dim 透传）
+    r3 = quiz.answer_option(sid, anon, "c", "选项C", "三问？", False,
+                            all_options=[{"id": "c", "text": "选项C",
+                                          "tags": ["面食", "汤"], "dim": "noodle-soup"}])
+    log3 = json.loads(quiz.get_session(sid, anon)["question_log"])
+    assert log3[-1]["tags"] == ["面食", "汤"] and log3[-1]["dim"] == "noodle-soup"
+
+
+def test_config_quiz_defaults_single_source():
+    """配置单源锚：quiz 缺省只在 core.STATIC_DEFAULTS 一份（web 侧组装不再
+    重复覆写）——键集与值逐项一致（form_branch_min 双正本漂移风险收口）。"""
+    from app.core.config import STATIC_DEFAULTS
+    from app.web.support import CONFIG_DEFAULTS
+    assert CONFIG_DEFAULTS["quiz"] == STATIC_DEFAULTS["quiz"]
+    assert CONFIG_DEFAULTS["quiz"]["form_branch_min"] == 2

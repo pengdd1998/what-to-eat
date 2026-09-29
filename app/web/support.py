@@ -18,17 +18,15 @@ from ..providers import env_ctx
 from ..domain import memory
 
 # 配置缺省单源（2026-09-16 分层：纯静态键在 core/config——cron 直引不跨层；
-# 跨层值 memory/scenes/env/quiz 在此组装，对外 CONFIG_DEFAULTS 不变）
+# 跨层值 memory/scenes/env 在此组装，对外 CONFIG_DEFAULTS 不变）。
+# 9/29 单源收口：quiz 键已随 STATIC_DEFAULTS 展开（此前此处重复覆写一份，
+# form_branch_min 双正本漂移风险＝评审发现 3）——单一事实源在 core/config。
 CONFIG_DEFAULTS = {
     **STATIC_DEFAULTS,
     "memory": memory.DEFAULTS,                 # SC-3 参数化
     # 环境上下文（预取注入 2026-09-15）：场景边界支持跨午夜（hi 以 24+ 小时表示）
     "scenes": env_ctx.SCENES_DEFAULT,
     "env": env_ctx.ENV_DEFAULTS,
-    # 画像收敛加速：count≥threshold 时收口下限放宽到 min_steps_profiled（P2）；
-    # min_steps 5→4＝owner 拍板观察期（2026-09-15 漏斗收敛改造）
-    "quiz": {"profile_threshold": 3, "min_steps": 4, "min_steps_profiled": 3,
-               "form_branch_min": 2},   # form 首题大方向分支下限（9/25 owner 放宽 3→2）
 }
 
 

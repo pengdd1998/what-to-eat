@@ -508,8 +508,12 @@ def next_question(session, client_ip: str = "") -> dict:
                 if not ok_v:
                     import sys as _sys
                     # 9/27 审查补完：validate 本体已守卫混合类型，此处对**原始**
-                    # options 裸调 .get 仍是 500 入口——打印处补元素守卫
-                    _raw_opts = [o for o in (data.get("options") or [])[:4]
+                    # options 裸调 .get 仍是 500 入口——打印处补元素守卫。
+                    # 9/28 复审再补：元素守卫挡不住**容器级**非 list（dict/int
+                    # 直接 [:4] 切片 TypeError）——先判 list 再切。
+                    _src_opts = data.get("options")
+                    _raw_opts = [o for o in (_src_opts[:4]
+                                             if isinstance(_src_opts, list) else [])
                                  if isinstance(o, dict)]
                     print(f"[WTE-DEBUG] validate 拒: {norm}"
                           f" | dim={data.get('dimension')} q={str(data.get('question',''))[:24]}"
@@ -570,6 +574,16 @@ def quiz_profiled(anon_id: str) -> bool:
     return bool(taste_summary(anon_id).get("profiled"))
 
 
+def _opt_tags(v) -> list:
+    """客户端/LLM 侧 tags 字段归一（缺陷⑲收口，9/29）：/answer 的 all_options
+    是请求体原样透传——tags 为标量（数字/None）时直接迭代＝TypeError→/answer
+    500（自会话自伤面，崩溃在 db.tx() 前无部分写入）。非 list 一律 []，
+    list 内元素 str 化截断（str 会被逐字符拆解，属垃圾数据同样归空防污染）。"""
+    if not isinstance(v, list):
+        return []
+    return [str(t)[:12] for t in v][:6]
+
+
 def answer_option(sid: int, anon_id: str, option_id: str, option_text: str,
                   question: str, from_local_bank: bool, all_options=None) -> dict:
     """记录一步选择；返回更新后的会话（含是否可收口）。
@@ -591,17 +605,20 @@ def answer_option(sid: int, anon_id: str, option_id: str, option_text: str,
             if tags:
                 break
     opts = []
-    for o in (all_options or []):
+    # 缺陷⑲：all_options 客户端可控，非 list（标量/None）不得迭代炸 /answer
+    for o in (all_options if isinstance(all_options, list) else []):
         if isinstance(o, dict) and o.get("text"):
             item = {"id": str(o.get("id", ""))[:24], "text": str(o["text"])[:20]}
-            if o.get("tags"):                       # 约束累积器依赖（2026-09-15 维度树）
-                item["tags"] = [str(t)[:12] for t in o["tags"]][:6]
+            _tg = _opt_tags(o.get("tags"))
+            if _tg:                                 # 约束累积器依赖（2026-09-15 维度树）
+                item["tags"] = _tg
             if o.get("dim"):
                 item["dim"] = str(o["dim"])[:40]
             opts.append(item)
             if o.get("id") == option_id:
-                if o.get("tags") and not tags:
-                    tags = [str(t)[:12] for t in o["tags"]][:6]   # 所选项 tags 进步级
+                _ptg = _opt_tags(o.get("tags"))
+                if _ptg and not tags:                # 所选项 tags 进步级（缺陷⑲归一）
+                    tags = _ptg
                 pick_dim = o.get("dim") or ""
     # L4 口径：source 取 next() 暂存的 pending_q（老会话 NULL 缺省 llm）
     try:
