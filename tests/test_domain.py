@@ -391,6 +391,8 @@ def test_local_recommend_swap_changes_dish():
         {"step": 3, "question": "辣度？", "option_text": "不辣", "tags": ["不辣"]},
     ]
     state = quiz.dimensions.build_state(log)
+    from app.core.util import now_iso
+    from app.core import db as _dbx
     names = set()
     for sc in range(6):
         s = _f8_session("pytest-f8-swap", log)
@@ -398,6 +400,14 @@ def test_local_recommend_swap_changes_dish():
         rec = quiz._local_recommend(s, state)
         assert quiz.dimensions.dish_consistent(rec["name"], state)
         names.add(rec["name"])
+        # 真实流语义：finalize 后 INSERT 推荐行（新鲜时间戳）＝下轮个人近窗
+        # （soak 修复后轮换由推荐行驱动；直调不插行＝首层单菜恒命中）
+        with _dbx.tx() as t:
+            t.execute("INSERT INTO recommendation(anon_id,session_id,name,tags,"
+                      "reason,meal_scenario,question_log,created_at) "
+                      "VALUES(?,?,?,?,?,?,?,?)",
+                      ("pytest-f8-swap", 0, rec["name"], "[]", "", "", "[]",
+                       now_iso()))
     assert len(names) >= 2, "换片拌 swap_count 失效：6 次换片全同一道菜"
 
 
@@ -846,3 +856,60 @@ def test_config_quiz_defaults_single_source():
     from app.web.support import CONFIG_DEFAULTS
     assert CONFIG_DEFAULTS["quiz"] == STATIC_DEFAULTS["quiz"]
     assert CONFIG_DEFAULTS["quiz"]["form_branch_min"] == 2
+
+
+def test_local_recommend_cross_user_variety():
+    """soak 坍缩锚（30 轮实捕 9/29）：同路径不同用户（不同 seed/身份）不得
+    千人一面——top 采样窗＋全局近 30 分钟去重＋最少用量轮换三层杠杆；
+    链一致性优先于全局多样性（耗尽回退重菜，不破链）。"""
+    from app.core import db as _db
+    from app.core.util import now_iso
+    log = [
+        {"step": 0, "question": "大方向？", "option_text": "一碗主食",
+         "tags": ["面食", "米饭"], "dim": "staple"},
+        {"step": 1, "question": "主食哪种？", "option_text": "米饭盖饭",
+         "tags": ["米饭"], "dim": "rice-bowl"},
+        {"step": 2, "question": "辣度？", "option_text": "微辣", "tags": ["微辣"]},
+        {"step": 3, "question": "浓淡？", "option_text": "浓郁", "tags": ["浓郁"]}]
+    state = quiz.dimensions.build_state(log)
+    names = []
+    for i in range(6):
+        anon = f"pytest-soak{i}"
+        s = _f8_session(anon, log, seed=f"soak-seed-{i}")
+        rec = quiz._local_recommend(s, state)
+        assert quiz.dimensions.dish_consistent(rec["name"], state)
+        names.append(rec["name"])
+        with _db.tx() as t:               # 真实流：finalize 后落推荐行（新鲜时间戳）
+            t.execute("INSERT INTO recommendation(anon_id,session_id,name,tags,"
+                      "reason,meal_scenario,question_log,created_at) "
+                      "VALUES(?,?,?,?,?,?,?,?)",
+                      (anon, 0, rec["name"], "[]", "", "", "[]", now_iso()))
+    from collections import Counter
+    mx = Counter(names).most_common(1)[0][1]
+    assert len(set(names)) >= 4 and mx <= 3, f"跨用户坍缩回归：{names}"
+
+
+def test_local_recommend_exhaust_never_breaks_chain():
+    """换片耗尽锚：个人近窗覆盖整池后（多次换片/多会话），回退＝重菜而非
+    越链（无词前缀层 vacuous 放行曾使 F8 形态经前缀层复活——soak 追踪
+    sc=5 实证端出胡椒猪肚鸡汤）。"""
+    from app.core import db as _db
+    from app.core.util import now_iso
+    log = [
+        {"step": 0, "question": "大方向？", "option_text": "热乎一锅",
+         "tags": ["汤", "暖"], "dim": "pot"},
+        {"step": 1, "question": "哪种？", "option_text": "粥品",
+         "tags": ["粥", "清淡"], "dim": "pot-congee"}]
+    state = quiz.dimensions.build_state(log)
+    for sc in range(6):
+        s = _f8_session("pytest-exhaust", log, seed="ex-seed")
+        s["swap_count"] = sc
+        rec = quiz._local_recommend(s, state)
+        assert quiz.dimensions.dish_consistent(rec["name"], state), \
+            (sc, rec["name"], "换片耗尽越链")
+        with _db.tx() as t:
+            t.execute("INSERT INTO recommendation(anon_id,session_id,name,tags,"
+                      "reason,meal_scenario,question_log,created_at) "
+                      "VALUES(?,?,?,?,?,?,?,?)",
+                      ("pytest-exhaust", 0, rec["name"], "[]", "", "", "[]",
+                       now_iso()))

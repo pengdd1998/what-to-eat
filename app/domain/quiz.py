@@ -14,7 +14,7 @@
 import hashlib
 import json
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from ..core import db
 from ..providers import env_ctx
@@ -684,12 +684,37 @@ def _local_recommend(session, state=None) -> dict:
                if (chosen or chain_tags) else 0)
         scored.append((hit, dish))
     best = max(s for s, _ in scored) if scored else 0
-    # 候选层序（F8 分层放宽＋F8-b 层内去重）：①top 分且链一致 ②全池链一致
-    # ③链前缀逐级回退（丢最深一级重试，保持「按链过滤」语义直到有菜——
-    # 极窄链在池中无菜时退到最近一级有菜的祖先链）。未锁链＝单层 top 分。
-    # 每层先剔最近已推荐，空了向下一层扩容；全层皆空才回退首层非去重集。
-    recent = set(_recent_dishes(session["anon_id"]))
-    top = [d for s, d in scored if s >= best] or pool
+    # 30 轮 soak 实捕（9/29，INC-20260929 全降级窗）：链特征 ×3 加权使 top
+    # 分层常坍缩为单菜——跨用户同路径千人一面（P2 咖喱鸡肉饭 ×5/P3 凉拌
+    # 鸡丝凉面 ×5/P5 手撕烤鸡饭 ×4，seed 拌盐对单元素候选集无效）。并列
+    # top 扩为「top 采样窗」（best−2 容差＝约一个链特征词位）：硬链过滤
+    # 分层不变，窗口内由 seed 哈希把跨用户摊开；确定性红线不变（同 seed
+    # 同窗同 pick，刷新不重摇）。
+    # 候选层序（F8 分层放宽＋F8-b 层内去重）：
+    # ①top 窗∩全链一致 ②全池∩全链一致（F8 保证：宽度优先于分数，禁无过滤
+    # 放行）③链前缀逐级回退×top 窗（前缀层保持分数序——soak 实证：无序
+    # 前缀层在去重压力下 hash 乱选＝面对 meat-grill 用户端出米线类漂移菜）。
+    # 层内去重双遍（soak 坍缩修复 9/29）：全链层先剔「个人∪全局近 30 分钟」
+    # （跨用户摊开千人一面），双遍皆空先回退同层仅个人去重——**链一致性
+    # 优先于全局多样性**（跨用户重菜用户不可见，链漂移可见）；仍空才向下
+    # 扩容；前缀层只做个人去重（其本职＝单用户窄池耗尽，不为全局多样性
+    # 服务）。全层皆空回退首层非去重集。查询异常全吞＝多样性杠杆不伤主链。
+    recent_user = set(_recent_dishes(session["anon_id"]))
+    recent = set(recent_user)
+    _cut = (datetime.now(timezone.utc) - timedelta(minutes=30)) \
+        .strftime("%Y-%m-%dT%H:%M")
+    _gcount = {}
+    try:
+        recent |= {r["name"] for r in db.connect().execute(
+            "SELECT DISTINCT name FROM recommendation WHERE created_at >= ?",
+            (_cut,)).fetchall()}
+        for r in db.connect().execute(
+                "SELECT name, COUNT(*) c FROM recommendation "
+                "WHERE created_at >= ? GROUP BY name", (_cut,)).fetchall():
+            _gcount[r["name"]] = r["c"]          # 全局用量（回退层均衡轮换用）
+    except Exception:
+        pass
+    top = [d for s, d in scored if s >= best - 2] or pool
     tiers = [top]
     if state is not None and state["chain"]:
         tiers = [
@@ -698,14 +723,44 @@ def _local_recommend(session, state=None) -> dict:
         sub = list(state["chain"])
         while len(sub) > 1:
             sub = sub[:-1]
-            tiers.append([d for d in pool if dimensions.dish_consistent(
+            # 前缀层只建「含 hints 的前缀」：无词前缀（如 [pot]）的
+            # dish_consistent 恒真＝vacuous 放行——soak 追踪实证全粥池被
+            # 个人近窗耗尽后会经此层端出越链菜（F8 形态经前缀层复活）。
+            # 有词前缀（[pot,pot-congee]→粥级）保有特异性才允许回退。
+            if not any(n in dimensions._DISH_HINTS for n in sub):
+                continue
+            tiers.append([d for d in top if dimensions.dish_consistent(
                 d["name"], {"chain": sub, "ortho": {}})])
     cands = []
-    for t in tiers:
+    # 层组遍历（soak 坍缩修复 9/29 终版）：
+    # ①全链层组（top 窗∩全链＋全池∩全链）按层序做「个人∪全局 30 分钟」
+    #   去重（跨用户摊开千人一面；分层序保持分数偏好）；
+    # ②组内全局皆空→**合并整组**仅个人去重——窄池下跨用户在组内轮换摊开
+    #   （P3 light-cold 仅两道：分层回退恒取 top 单菜仍 ×5，合并后哈希轮换）；
+    #   **链一致性优先于全局多样性**（跨用户重菜用户不可见，链漂移可见）；
+    # ③前缀层逐层仅个人去重（本职＝单用户窄池耗尽，不为全局多样性服务）；
+    # ④全层皆空回退首层非去重集（池耗尽终态）。
+    _chained = state is not None and state["chain"]
+    chain_tiers = tiers[:2] if _chained else tiers[:1]
+    for t in chain_tiers:
         fresh = [d for d in t if d["name"] not in recent]
         if fresh:
             cands = fresh
             break
+    if not cands:
+        merged = [d for t in chain_tiers for d in t]
+        cands = [d for d in merged if d["name"] not in recent_user]
+        # 均衡轮换（窄池数学下限）：全局用量最少者优先（并列内哈希）——
+        # 两道菜的分支 6 用户纯哈希可得 4/2，最少用量优先强制 ≈3/3
+        if len(cands) > 1 and _gcount:
+            _mn = min(_gcount.get(d["name"], 0) for d in cands)
+            cands = [d for d in cands if _gcount.get(d["name"], 0) == _mn]
+    if not cands:
+        for t in (tiers[2:] if _chained else []):
+            fresh = [d for d in t if d["name"] not in recent_user]
+            if fresh:
+                cands = fresh
+                break
     if not cands:
         cands = next((t for t in tiers if t), pool)
     h = hashlib.sha256((session["recommend_seed"] + "|" +
