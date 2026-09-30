@@ -913,3 +913,32 @@ def test_local_recommend_exhaust_never_breaks_chain():
                       "VALUES(?,?,?,?,?,?,?,?)",
                       ("pytest-exhaust", 0, rec["name"], "[]", "", "", "[]",
                        now_iso()))
+
+
+def test_review_930_two_observations():
+    """9/30 评审低危两项收口锚：①merged 拼接去重（tier0⊂tier1 不得双倍
+    权重）；②_opt_tags 元素级过滤（dict 元素不产生 "{'a': 1}" 垃圾串）。"""
+    assert quiz._opt_tags([{"a": 1}, "面食", 5]) == ["面食", "5"]
+    assert quiz._opt_tags(["面食", ["x"], None, "汤"]) == ["面食", "汤"]
+    # ①：merged 无重复（借全链耗尽路径——两 tier 同名菜只占一席）
+    from app.core import db as _db
+    from app.core.util import now_iso
+    log = [{"step": 0, "question": "大方向？", "option_text": "热乎一锅",
+            "tags": ["汤", "暖"], "dim": "pot"},
+           {"step": 1, "question": "哪种？", "option_text": "粥品",
+            "tags": ["粥", "清淡"], "dim": "pot-congee"}]
+    state = quiz.dimensions.build_state(log)
+    names = []
+    for i in range(4):                       # 4 用户耗尽 2~5 道粥池后进 merged 路径
+        anon = f"pytest-r930-{i}"
+        s = _f8_session(anon, log, seed=f"r930-{i}")
+        rec = quiz._local_recommend(s, state)
+        names.append(rec["name"])
+        with _db.tx() as t:
+            t.execute("INSERT INTO recommendation(anon_id,session_id,name,tags,"
+                      "reason,meal_scenario,question_log,created_at) "
+                      "VALUES(?,?,?,?,?,?,?,?)",
+                      (anon, 0, rec["name"], "[]", "", "", "[]", now_iso()))
+    from collections import Counter
+    c = Counter(names)
+    assert c.most_common(1)[0][1] <= 3, names    # 均衡轮换不被重复加权破坏

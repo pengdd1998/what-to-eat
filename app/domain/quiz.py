@@ -581,7 +581,10 @@ def _opt_tags(v) -> list:
     list 内元素 str 化截断（str 会被逐字符拆解，属垃圾数据同样归空防污染）。"""
     if not isinstance(v, list):
         return []
-    return [str(t)[:12] for t in v][:6]
+    # 元素级过滤（9/30 评审观察 4）：dict/list 元素 str 化＝"{'a': 1}"类截断
+    # 垃圾串入库——只留标量元素
+    return [str(t)[:12] for t in v
+            if isinstance(t, (str, int, float))][:6]
 
 
 def answer_option(sid: int, anon_id: str, option_id: str, option_text: str,
@@ -748,7 +751,11 @@ def _local_recommend(session, state=None) -> dict:
             cands = fresh
             break
     if not cands:
-        merged = [d for t in chain_tiers for d in t]
+        # 去重合并（9/30 评审观察 2）：tier0 ⊂ tier1，直接拼接使 top 窗菜在
+        # 哈希空间权重翻倍——按名去重保序
+        _seen = set()
+        merged = [d for t in chain_tiers for d in t
+                  if not (d["name"] in _seen or _seen.add(d["name"]))]
         cands = [d for d in merged if d["name"] not in recent_user]
         # 均衡轮换（窄池数学下限）：全局用量最少者优先（并列内哈希）——
         # 两道菜的分支 6 用户纯哈希可得 4/2，最少用量优先强制 ≈3/3
